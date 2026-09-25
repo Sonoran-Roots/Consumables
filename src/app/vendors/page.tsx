@@ -30,20 +30,33 @@ export default async function VendorsPage() {
             <tr>
               <th className="px-4 py-2 text-left font-medium text-gray-500">Name</th>
               <th className="px-4 py-2 text-left font-medium text-gray-500">Status</th>
+              <th className="px-4 py-2 text-left font-medium text-gray-500"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {vendors.map((v) => (
               <tr key={v.id}>
-                <td className="px-4 py-2 font-medium text-gray-900">{v.name}</td>
+                <td className="px-4 py-2 font-medium text-gray-900">
+                  <Link href={`/vendors/${v.id}/edit`} className="hover:underline">
+                    {v.name}
+                  </Link>
+                </td>
                 <td className="px-4 py-2 text-gray-600">
                   {v.isActive ? "Active" : "Inactive"}
+                </td>
+                <td className="px-4 py-2 text-right">
+                  <Link
+                    href={`/vendors/${v.id}/edit`}
+                    className="text-xs text-emerald-700 hover:underline"
+                  >
+                    edit
+                  </Link>
                 </td>
               </tr>
             ))}
             {vendors.length === 0 && (
               <tr>
-                <td colSpan={2} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={3} className="px-4 py-6 text-center text-gray-400">
                   No vendors yet.{" "}
                   <Link href="/vendors/new" className="text-emerald-700 underline">
                     Add the first one

@@ -49,6 +49,12 @@ export default async function SitesPage() {
                 <span className="rounded bg-gray-100 px-2 py-0.5 text-xs font-mono text-gray-600">
                   {book.code}
                 </span>
+                <Link
+                  href={`/books/${book.id}/edit`}
+                  className="text-xs text-emerald-700 hover:underline"
+                >
+                  edit
+                </Link>
                 {book.sites.length === 0 ? (
                   <form action={deleteBook}>
                     <input type="hidden" name="bookId" value={book.id} />

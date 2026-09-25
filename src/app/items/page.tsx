@@ -40,12 +40,22 @@ export default async function ItemsPage() {
                 Default vendor
               </th>
               <th className="px-4 py-2 text-left font-medium text-gray-500">SKU</th>
+              <th className="px-4 py-2 text-left font-medium text-gray-500"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {items.map((item) => (
               <tr key={item.id}>
-                <td className="px-4 py-2 font-medium text-gray-900">{item.name}</td>
+                <td className="px-4 py-2 font-medium text-gray-900">
+                  <Link href={`/items/${item.id}/edit`} className="hover:underline">
+                    {item.name}
+                  </Link>
+                  {!item.isActive && (
+                    <span className="ml-2 rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">
+                      inactive
+                    </span>
+                  )}
+                </td>
                 <td className="px-4 py-2 text-gray-600">{item.category.name}</td>
                 <td className="px-4 py-2 text-gray-600">{item.defaultUom.code}</td>
                 <td className="px-4 py-2 text-gray-600">{item.materialType}</td>
@@ -55,11 +65,19 @@ export default async function ItemsPage() {
                 <td className="px-4 py-2 font-mono text-xs text-gray-400">
                   {item.sku ?? "—"}
                 </td>
+                <td className="px-4 py-2 text-right">
+                  <Link
+                    href={`/items/${item.id}/edit`}
+                    className="text-xs text-emerald-700 hover:underline"
+                  >
+                    edit
+                  </Link>
+                </td>
               </tr>
             ))}
             {items.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={7} className="px-4 py-6 text-center text-gray-400">
                   No items yet.{" "}
                   <Link href="/items/new" className="text-emerald-700 underline">
                     Add the first one

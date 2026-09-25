@@ -62,6 +62,8 @@ const GROUPS: Group[] = [
     children: [
       { href: "/sites", label: "Sites & books" },
       { href: "/employees", label: "Employees" },
+      { href: "/categories", label: "Categories" },
+      { href: "/units", label: "Units of measure" },
     ],
   },
 ];

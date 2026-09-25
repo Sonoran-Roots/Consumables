@@ -23,3 +23,28 @@ export async function createEmployee(
   revalidatePath("/employees");
   redirect("/employees");
 }
+
+export type UpdateEmployeeState = { error?: string } | null;
+
+export async function updateEmployee(
+  _prevState: UpdateEmployeeState,
+  formData: FormData
+): Promise<UpdateEmployeeState> {
+  const employeeId = String(formData.get("employeeId") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  const initials = String(formData.get("initials") ?? "").trim() || null;
+  const siteId = String(formData.get("siteId") ?? "") || null;
+  const isActive = formData.get("isActive") === "on";
+
+  if (!employeeId || !name) {
+    return { error: "Name is required." };
+  }
+
+  await db.employee.update({
+    where: { id: employeeId },
+    data: { name, initials, siteId, isActive },
+  });
+
+  revalidatePath("/employees");
+  redirect("/employees");
+}

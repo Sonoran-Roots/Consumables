@@ -31,6 +31,33 @@ export async function createBook(
   redirect("/sites");
 }
 
+export type UpdateBookState = { error?: string } | null;
+
+export async function updateBook(
+  _prevState: UpdateBookState,
+  formData: FormData
+): Promise<UpdateBookState> {
+  const bookId = String(formData.get("bookId") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  const code = String(formData.get("code") ?? "").trim().toUpperCase();
+
+  if (!bookId || !name || !code) {
+    return { error: "Name and code are required." };
+  }
+
+  try {
+    await db.book.update({ where: { id: bookId }, data: { name, code } });
+  } catch (e) {
+    if (e instanceof Error && e.message.includes("Unique constraint")) {
+      return { error: `A book named "${name}" or coded "${code}" already exists.` };
+    }
+    return { error: "Could not update book. Please try again." };
+  }
+
+  revalidatePath("/sites");
+  redirect("/sites");
+}
+
 export async function deleteBook(formData: FormData) {
   const bookId = String(formData.get("bookId") ?? "");
   if (!bookId) return;

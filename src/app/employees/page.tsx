@@ -38,19 +38,37 @@ export default async function EmployeesPage() {
               <th className="px-4 py-2 text-left font-medium text-gray-500">
                 Home site
               </th>
+              <th className="px-4 py-2 text-left font-medium text-gray-500"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {employees.map((e) => (
               <tr key={e.id}>
-                <td className="px-4 py-2 font-medium text-gray-900">{e.name}</td>
+                <td className="px-4 py-2 font-medium text-gray-900">
+                  <Link href={`/employees/${e.id}/edit`} className="hover:underline">
+                    {e.name}
+                  </Link>
+                  {!e.isActive && (
+                    <span className="ml-2 rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">
+                      inactive
+                    </span>
+                  )}
+                </td>
                 <td className="px-4 py-2 text-gray-600">{e.initials ?? "—"}</td>
                 <td className="px-4 py-2 text-gray-600">{e.site?.name ?? "—"}</td>
+                <td className="px-4 py-2 text-right">
+                  <Link
+                    href={`/employees/${e.id}/edit`}
+                    className="text-xs text-emerald-700 hover:underline"
+                  >
+                    edit
+                  </Link>
+                </td>
               </tr>
             ))}
             {employees.length === 0 && (
               <tr>
-                <td colSpan={3} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={4} className="px-4 py-6 text-center text-gray-400">
                   No employees yet.{" "}
                   <Link href="/employees/new" className="text-emerald-700 underline">
                     Add the first one
