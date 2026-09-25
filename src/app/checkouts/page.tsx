@@ -19,12 +19,21 @@ export default async function CheckoutsPage() {
             Every checkout is tied to a real employee, with an optional purpose.
           </p>
         </div>
-        <Link
-          href="/checkouts/new"
-          className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700"
-        >
-          New checkout
-        </Link>
+        <div className="flex gap-2">
+          <Link
+            href="/kiosk"
+            target="_blank"
+            className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50"
+          >
+            Open kiosk mode
+          </Link>
+          <Link
+            href="/checkouts/new"
+            className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+          >
+            New checkout
+          </Link>
+        </div>
       </div>
 
       <div className="mt-6 overflow-x-auto rounded-lg border border-gray-200 bg-white">

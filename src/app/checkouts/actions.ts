@@ -4,33 +4,26 @@ import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-export type CreateCheckoutState = { error?: string } | null;
-
-export async function createCheckout(
-  _prevState: CreateCheckoutState,
-  formData: FormData
-): Promise<CreateCheckoutState> {
+function parseCheckoutForm(formData: FormData) {
   const siteId = String(formData.get("siteId") ?? "");
   const employeeId = String(formData.get("employeeId") ?? "");
   const purpose = String(formData.get("purpose") ?? "").trim() || null;
   const department = String(formData.get("department") ?? "").trim() || null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
-  const isReturn = formData.get("isReturn") === "on";
+  const isReturn = formData.get("isReturn") === "on" || formData.get("isReturn") === "true";
 
   const itemIds = formData.getAll("itemId").map(String);
   const quantities = formData.getAll("quantity").map(Number);
-
-  if (!siteId || !employeeId) {
-    return { error: "Please choose a site and the employee checking items out." };
-  }
 
   const lines = itemIds
     .map((itemId, i) => ({ itemId, quantity: quantities[i] }))
     .filter((l) => l.itemId && l.quantity > 0);
 
-  if (lines.length === 0) {
-    return { error: "Add at least one item with a quantity greater than zero." };
-  }
+  return { siteId, employeeId, purpose, department, notes, isReturn, lines };
+}
+
+async function postCheckout(parsed: ReturnType<typeof parseCheckoutForm>) {
+  const { siteId, employeeId, purpose, department, notes, isReturn, lines } = parsed;
 
   const event = await db.checkoutEvent.create({
     data: {
@@ -55,9 +48,58 @@ export async function createCheckout(
     })),
   });
 
+  return event;
+}
+
+export type CreateCheckoutState = { error?: string } | null;
+
+export async function createCheckout(
+  _prevState: CreateCheckoutState,
+  formData: FormData
+): Promise<CreateCheckoutState> {
+  const parsed = parseCheckoutForm(formData);
+
+  if (!parsed.siteId || !parsed.employeeId) {
+    return { error: "Please choose a site and the employee checking items out." };
+  }
+  if (parsed.lines.length === 0) {
+    return { error: "Add at least one item with a quantity greater than zero." };
+  }
+
+  await postCheckout(parsed);
+
   revalidatePath("/checkouts");
   revalidatePath("/inventory");
   redirect("/checkouts");
+}
+
+export type KioskCheckoutState =
+  | { error: string; success?: undefined }
+  | { success: true; itemCount: number; error?: undefined }
+  | null;
+
+// Same posting logic as createCheckout, but returns a result instead of
+// redirecting — the kiosk stays on-screen so the next person can log their
+// checkout immediately, rather than landing on the full desktop /checkouts
+// list.
+export async function logKioskCheckout(
+  _prevState: KioskCheckoutState,
+  formData: FormData
+): Promise<KioskCheckoutState> {
+  const parsed = parseCheckoutForm(formData);
+
+  if (!parsed.siteId || !parsed.employeeId) {
+    return { error: "Pick a site and who's checking out." };
+  }
+  if (parsed.lines.length === 0) {
+    return { error: "Add at least one item first." };
+  }
+
+  await postCheckout(parsed);
+
+  revalidatePath("/checkouts");
+  revalidatePath("/inventory");
+  return { success: true, itemCount: parsed.lines.length };
 }
 
 export type UpdateCheckoutState = { error?: string } | null;
