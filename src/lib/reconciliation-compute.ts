@@ -1,4 +1,23 @@
 import { db } from "@/lib/db";
+import type { TransactionType } from "@prisma/client";
+
+// Usage/consumption, as a positive magnitude — sales, net checkouts (a
+// return gives some back), and damage. Shared between the reconciliation
+// snapshot below and the item detail page's utilization trend, so both
+// agree on what counts as "used."
+export function consumptionDelta(type: TransactionType, quantity: number): number {
+  switch (type) {
+    case "SALE":
+    case "SALE_OUT_OF_STATE":
+    case "DAMAGED":
+    case "CHECKOUT":
+      return Math.abs(quantity);
+    case "CHECKOUT_RETURN":
+      return -Math.abs(quantity);
+    default:
+      return 0;
+  }
+}
 
 export type LineComputation = {
   itemId: string;

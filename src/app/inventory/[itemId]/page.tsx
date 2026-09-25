@@ -2,8 +2,19 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { db } from "@/lib/db";
 import BackLink from "@/components/back-link";
+import { consumptionDelta } from "@/lib/reconciliation-compute";
+import ParLevelCalculator from "./par-level-calculator";
 
 export const dynamic = "force-dynamic";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function startOfWeek(d: Date) {
+  const copy = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const day = copy.getUTCDay();
+  copy.setUTCDate(copy.getUTCDate() - day);
+  return copy;
+}
 
 const TYPE_LABELS: Record<string, string> = {
   OPENING_BALANCE: "Opening balance",
@@ -47,7 +58,7 @@ export default async function ItemInventoryDetailPage({
   });
   if (!item) notFound();
 
-  const [bySite, sites, history] = await Promise.all([
+  const [bySite, sites, history, consumptionTx, onHandAtSiteAgg] = await Promise.all([
     db.inventoryTransaction.groupBy({
       by: ["siteId"],
       where: { itemId },
@@ -61,6 +72,23 @@ export default async function ItemInventoryDetailPage({
           take: 100,
         })
       : Promise.resolve([]),
+    siteId
+      ? db.inventoryTransaction.findMany({
+          where: {
+            itemId,
+            siteId,
+            type: { in: ["SALE", "SALE_OUT_OF_STATE", "CHECKOUT", "CHECKOUT_RETURN", "DAMAGED"] },
+          },
+          orderBy: { occurredAt: "asc" },
+          select: { occurredAt: true, type: true, quantity: true },
+        })
+      : Promise.resolve([]),
+    siteId
+      ? db.inventoryTransaction.aggregate({
+          where: { itemId, siteId },
+          _sum: { quantity: true },
+        })
+      : Promise.resolve(null),
   ]);
 
   const siteById = new Map(sites.map((s) => [s.id, s]));
@@ -74,6 +102,45 @@ export default async function ItemInventoryDetailPage({
 
   const totalOnHand = onHandRows.reduce((sum, r) => sum + r.onHand, 0);
   const selectedSite = siteId ? siteById.get(siteId) : undefined;
+  const onHandAtSite = onHandAtSiteAgg?._sum.quantity ?? 0;
+
+  const now = new Date();
+  const earliest = consumptionTx[0]?.occurredAt;
+  const daysOfHistory = earliest
+    ? Math.max(Math.round((now.getTime() - earliest.getTime()) / DAY_MS), 1)
+    : 0;
+  const totalConsumed = consumptionTx.reduce(
+    (sum, t) => sum + consumptionDelta(t.type, t.quantity),
+    0
+  );
+  const allTimeAvgPerDay = daysOfHistory > 0 ? totalConsumed / daysOfHistory : 0;
+
+  const windows = [7, 30, 90].map((days) => {
+    const cutoff = new Date(now.getTime() - days * DAY_MS);
+    const total = consumptionTx
+      .filter((t) => t.occurredAt >= cutoff)
+      .reduce((sum, t) => sum + consumptionDelta(t.type, t.quantity), 0);
+    return { days, total, perDay: total / days };
+  });
+
+  const weeklyMap = new Map<number, number>();
+  for (const t of consumptionTx) {
+    const weekStart = startOfWeek(t.occurredAt).getTime();
+    weeklyMap.set(weekStart, (weeklyMap.get(weekStart) ?? 0) + consumptionDelta(t.type, t.quantity));
+  }
+  const twelveWeeksAgo = startOfWeek(new Date(now.getTime() - 11 * 7 * DAY_MS)).getTime();
+  const weeks: { label: string; total: number }[] = [];
+  for (let w = twelveWeeksAgo; w <= startOfWeek(now).getTime(); w += 7 * DAY_MS) {
+    weeks.push({
+      label: new Date(w).toLocaleDateString(undefined, {
+        month: "numeric",
+        day: "numeric",
+        timeZone: "UTC",
+      }),
+      total: weeklyMap.get(w) ?? 0,
+    });
+  }
+  const maxWeekly = Math.max(1, ...weeks.map((w) => w.total));
 
   return (
     <div className="max-w-4xl space-y-6">
@@ -256,6 +323,63 @@ export default async function ItemInventoryDetailPage({
           </div>
         )}
       </section>
+
+      {selectedSite && (
+        <section className="rounded-lg border border-gray-200 bg-white p-6">
+          <h2 className="text-sm font-medium text-gray-700">
+            Utilization &amp; par level at {selectedSite.name}
+          </h2>
+          <p className="mt-1 text-xs text-gray-500">
+            Based on sales, net checkouts, and damage recorded at this site.{" "}
+            {daysOfHistory > 0
+              ? `Covers ${daysOfHistory} day${daysOfHistory === 1 ? "" : "s"} of history.`
+              : "No usage history recorded here yet."}
+          </p>
+
+          <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+            {windows.map((w) => (
+              <div key={w.days} className="rounded-lg bg-gray-50 p-3">
+                <div className="text-xs text-gray-500">Last {w.days} days</div>
+                <div className="text-lg font-semibold text-gray-900">{w.total}</div>
+                <div className="text-xs text-gray-500">{w.perDay.toFixed(2)}/day</div>
+              </div>
+            ))}
+            <div className="rounded-lg bg-gray-50 p-3">
+              <div className="text-xs text-gray-500">All-time avg</div>
+              <div className="text-lg font-semibold text-gray-900">
+                {allTimeAvgPerDay.toFixed(2)}
+              </div>
+              <div className="text-xs text-gray-500">per day</div>
+            </div>
+          </div>
+
+          <div className="mt-5">
+            <p className="mb-2 text-xs font-medium text-gray-500">
+              Weekly usage (last 12 weeks)
+            </p>
+            <div className="flex h-24 items-end gap-1">
+              {weeks.map((w, i) => (
+                <div
+                  key={i}
+                  title={`Week of ${w.label}: ${w.total}`}
+                  className="flex-1 rounded-t bg-emerald-200"
+                  style={{ height: `${Math.max((w.total / maxWeekly) * 100, w.total > 0 ? 4 : 1)}%` }}
+                />
+              ))}
+            </div>
+            <div className="mt-1 flex justify-between text-[10px] text-gray-400">
+              <span>{weeks[0]?.label}</span>
+              <span>{weeks[weeks.length - 1]?.label}</span>
+            </div>
+          </div>
+
+          <ParLevelCalculator
+            avgDailyUsage={allTimeAvgPerDay}
+            currentOnHand={onHandAtSite}
+            daysOfHistory={daysOfHistory}
+          />
+        </section>
+      )}
     </div>
   );
 }
