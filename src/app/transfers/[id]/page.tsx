@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { db } from "@/lib/db";
 import BackLink from "@/components/back-link";
 import { receiveTransferAction, cancelTransferAction } from "../actions";
@@ -38,8 +39,16 @@ export default async function TransferDetailPage({
       <div className="mt-6 rounded-lg border border-gray-200 bg-white p-6">
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium text-gray-700">Status</span>
-          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
-            {transfer.status.replace("_", " ")}
+          <span className="flex items-center gap-3">
+            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
+              {transfer.status.replace("_", " ")}
+            </span>
+            <Link
+              href={`/transfers/${transfer.id}/edit`}
+              className="text-xs text-emerald-700 hover:underline"
+            >
+              edit
+            </Link>
           </span>
         </div>
 

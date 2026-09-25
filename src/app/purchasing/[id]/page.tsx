@@ -1,13 +1,19 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { db } from "@/lib/db";
 import BackLink from "@/components/back-link";
 import {
   recordDelivery,
   recordPayment,
+  updatePayment,
+  deletePayment,
   markPaidInFull,
   closePurchaseOrder,
   addVendorCredit,
+  updateVendorCreditAction,
+  deleteVendorCreditAction,
 } from "../actions";
+import DeleteRowButton from "./delete-row-button";
 
 export const dynamic = "force-dynamic";
 
@@ -78,6 +84,12 @@ export default async function PurchaseOrderDetailPage({
           >
             {po.status.replace(/_/g, " ")}
           </span>
+          <Link
+            href={`/purchasing/${po.id}/edit`}
+            className="text-xs text-emerald-700 hover:underline"
+          >
+            edit
+          </Link>
         </div>
         <p className="mt-1 text-sm text-gray-500">
           {po.vendor.name} · {po.site.name} · ordered {fmtDate(po.orderDate)}
@@ -306,9 +318,36 @@ export default async function PurchaseOrderDetailPage({
         )}
         <ul className="mt-4 divide-y divide-gray-100 text-sm">
           {po.payments.map((p) => (
-            <li key={p.id} className="flex items-center justify-between py-2">
-              <span className="text-gray-900">{fmtDate(p.paymentDate)}</span>
-              <span className="text-gray-600">${p.amount.toFixed(2)}</span>
+            <li key={p.id} className="flex items-center gap-2 py-2">
+              <form action={updatePayment} className="flex flex-1 items-center gap-2">
+                <input type="hidden" name="paymentId" value={p.id} />
+                <input type="hidden" name="purchaseOrderId" value={po.id} />
+                <input
+                  name="paymentDate"
+                  type="date"
+                  defaultValue={p.paymentDate.toISOString().slice(0, 10)}
+                  className="rounded-md border border-gray-300 px-2 py-1 text-sm"
+                />
+                <input
+                  name="amount"
+                  type="number"
+                  step="any"
+                  min="0"
+                  defaultValue={p.amount}
+                  className="w-28 rounded-md border border-gray-300 px-2 py-1 text-sm"
+                />
+                <button
+                  type="submit"
+                  className="text-xs text-emerald-700 hover:underline"
+                >
+                  save
+                </button>
+              </form>
+              <form action={deletePayment}>
+                <input type="hidden" name="paymentId" value={p.id} />
+                <input type="hidden" name="purchaseOrderId" value={po.id} />
+                <DeleteRowButton confirmText="Delete this payment?" />
+              </form>
             </li>
           ))}
           {po.payments.length === 0 && (
@@ -362,16 +401,54 @@ export default async function PurchaseOrderDetailPage({
         </form>
         <ul className="mt-4 divide-y divide-gray-100 text-sm">
           {po.vendorCredits.map((c) => (
-            <li key={c.id} className="flex items-center justify-between py-2">
-              <span className="text-gray-900">{fmtDate(c.creditDate)}</span>
-              <span className="text-gray-600">${c.amount.toFixed(2)}</span>
-              <span
-                className={
-                  c.accountingNotified ? "text-emerald-700" : "text-amber-700"
-                }
+            <li key={c.id} className="flex flex-col gap-2 py-2">
+              <form
+                action={updateVendorCreditAction}
+                className="flex flex-wrap items-center gap-2"
               >
-                {c.accountingNotified ? "Accounting notified" : "Not yet notified"}
-              </span>
+                <input type="hidden" name="creditId" value={c.id} />
+                <input type="hidden" name="purchaseOrderId" value={po.id} />
+                <input
+                  name="creditDate"
+                  type="date"
+                  defaultValue={c.creditDate.toISOString().slice(0, 10)}
+                  className="rounded-md border border-gray-300 px-2 py-1 text-sm"
+                />
+                <input
+                  name="amount"
+                  type="number"
+                  step="any"
+                  min="0"
+                  defaultValue={c.amount}
+                  className="w-28 rounded-md border border-gray-300 px-2 py-1 text-sm"
+                />
+                <input
+                  name="notes"
+                  defaultValue={c.notes ?? ""}
+                  placeholder="Notes"
+                  className="flex-1 rounded-md border border-gray-300 px-2 py-1 text-sm"
+                />
+                <label className="flex items-center gap-1 text-xs text-gray-700">
+                  <input
+                    type="checkbox"
+                    name="accountingNotified"
+                    defaultChecked={c.accountingNotified}
+                    className="rounded border-gray-300"
+                  />
+                  Notified
+                </label>
+                <button
+                  type="submit"
+                  className="text-xs text-emerald-700 hover:underline"
+                >
+                  save
+                </button>
+              </form>
+              <form action={deleteVendorCreditAction} className="self-end">
+                <input type="hidden" name="creditId" value={c.id} />
+                <input type="hidden" name="purchaseOrderId" value={po.id} />
+                <DeleteRowButton confirmText="Delete this vendor credit?" />
+              </form>
             </li>
           ))}
           {po.vendorCredits.length === 0 && (

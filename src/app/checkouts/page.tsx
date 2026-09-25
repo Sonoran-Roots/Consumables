@@ -41,6 +41,7 @@ export default async function CheckoutsPage() {
                 Purpose
               </th>
               <th className="px-4 py-2 text-left font-medium text-gray-500">Type</th>
+              <th className="px-4 py-2 text-left font-medium text-gray-500"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -66,11 +67,19 @@ export default async function CheckoutsPage() {
                     {e.isReturn ? "return" : "checkout"}
                   </span>
                 </td>
+                <td className="px-4 py-2 text-right">
+                  <Link
+                    href={`/checkouts/${e.id}/edit`}
+                    className="text-xs text-emerald-700 hover:underline"
+                  >
+                    edit
+                  </Link>
+                </td>
               </tr>
             ))}
             {events.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={7} className="px-4 py-6 text-center text-gray-400">
                   No checkouts recorded yet.{" "}
                   <Link href="/checkouts/new" className="text-emerald-700 underline">
                     Record one

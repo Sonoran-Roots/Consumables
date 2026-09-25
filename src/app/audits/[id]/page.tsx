@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import BackLink from "@/components/back-link";
 import { updateAuditCounts, addAuditLine } from "../actions";
+import AuditHeaderForm from "./audit-header-form";
 
 export const dynamic = "force-dynamic";
 
@@ -23,12 +24,14 @@ export default async function AuditDetailPage({
 
   const isFinalized = audit.status === "FINALIZED";
 
-  const availableItems = isFinalized
-    ? []
-    : await db.item.findMany({
-        where: { id: { notIn: audit.lines.map((l) => l.itemId) } },
-        orderBy: { name: "asc" },
-      });
+  const [availableItems, sites] = await Promise.all([
+    db.item.findMany({
+      where: { id: { notIn: audit.lines.map((l) => l.itemId) } },
+      orderBy: { name: "asc" },
+    }),
+    db.site.findMany({ orderBy: { name: "asc" }, include: { book: true } }),
+  ]);
+  const employees = await db.employee.findMany({ orderBy: { name: "asc" } });
 
   return (
     <div className="max-w-3xl">
@@ -41,7 +44,16 @@ export default async function AuditDetailPage({
         {audit.performedBy ? ` · performed by ${audit.performedBy.name}` : ""}
       </p>
 
-      {!isFinalized && availableItems.length > 0 && (
+      <AuditHeaderForm audit={audit} sites={sites} employees={employees} />
+
+      {isFinalized && (
+        <p className="mt-3 text-sm text-amber-700">
+          This audit is finalized. Counts can still be edited below — saving
+          will re-reconcile the posted discrepancy transactions to match.
+        </p>
+      )}
+
+      {availableItems.length > 0 && (
         <form action={addAuditLine} className="mt-6 flex items-center gap-2">
           <input type="hidden" name="auditId" value={audit.id} />
           <select
@@ -104,8 +116,7 @@ export default async function AuditDetailPage({
                         type="number"
                         step="any"
                         defaultValue={line.countedQty ?? ""}
-                        disabled={isFinalized}
-                        className="w-28 rounded-md border border-gray-300 px-2 py-1 text-right text-sm disabled:bg-gray-50 disabled:text-gray-400"
+                        className="w-28 rounded-md border border-gray-300 px-2 py-1 text-right text-sm"
                       />
                     </td>
                     <td
@@ -130,7 +141,7 @@ export default async function AuditDetailPage({
           </table>
         </div>
 
-        {!isFinalized && audit.lines.length > 0 && (
+        {audit.lines.length > 0 && (
           <div className="mt-4 flex items-center gap-3">
             <button
               type="submit"
@@ -138,24 +149,19 @@ export default async function AuditDetailPage({
               value="save"
               className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50"
             >
-              Save counts
+              {isFinalized ? "Save counts (re-reconcile)" : "Save counts"}
             </button>
-            <button
-              type="submit"
-              name="intent"
-              value="finalize"
-              className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700"
-            >
-              Finalize audit
-            </button>
+            {!isFinalized && (
+              <button
+                type="submit"
+                name="intent"
+                value="finalize"
+                className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+              >
+                Finalize audit
+              </button>
+            )}
           </div>
-        )}
-
-        {isFinalized && (
-          <p className="mt-4 text-sm text-emerald-700">
-            This audit is finalized. Any variances were posted as discrepancy
-            transactions and are reflected in current inventory.
-          </p>
         )}
       </form>
     </div>
