@@ -1,7 +1,12 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import BackLink from "@/components/back-link";
-import { updateAuditCounts, addAuditLine } from "../actions";
+import {
+  updateAuditCounts,
+  addAuditLine,
+  cancelAudit,
+  reactivateAudit,
+} from "../actions";
 import AuditHeaderForm from "./audit-header-form";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +28,8 @@ export default async function AuditDetailPage({
   if (!audit) notFound();
 
   const isFinalized = audit.status === "FINALIZED";
+  const isCancelled = audit.status === "CANCELLED";
+  const isInProgress = audit.status === "IN_PROGRESS";
 
   const [availableItems, sites] = await Promise.all([
     db.item.findMany({
@@ -53,7 +60,24 @@ export default async function AuditDetailPage({
         </p>
       )}
 
-      {availableItems.length > 0 && (
+      {isCancelled && (
+        <div className="mt-3 flex items-center gap-3">
+          <p className="text-sm text-gray-500">
+            This audit was cancelled and never posted anything to the ledger.
+          </p>
+          <form action={reactivateAudit}>
+            <input type="hidden" name="auditId" value={audit.id} />
+            <button
+              type="submit"
+              className="rounded-md px-3 py-1.5 text-xs font-medium text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50"
+            >
+              Reactivate
+            </button>
+          </form>
+        </div>
+      )}
+
+      {!isCancelled && availableItems.length > 0 && (
         <form action={addAuditLine} className="mt-6 flex items-center gap-2">
           <input type="hidden" name="auditId" value={audit.id} />
           <select
@@ -116,7 +140,8 @@ export default async function AuditDetailPage({
                         type="number"
                         step="any"
                         defaultValue={line.countedQty ?? ""}
-                        className="w-28 rounded-md border border-gray-300 px-2 py-1 text-right text-sm"
+                        disabled={isCancelled}
+                        className="w-28 rounded-md border border-gray-300 px-2 py-1 text-right text-sm disabled:bg-gray-50 disabled:text-gray-400"
                       />
                     </td>
                     <td
@@ -141,7 +166,7 @@ export default async function AuditDetailPage({
           </table>
         </div>
 
-        {audit.lines.length > 0 && (
+        {audit.lines.length > 0 && !isCancelled && (
           <div className="mt-4 flex items-center gap-3">
             <button
               type="submit"
@@ -164,6 +189,18 @@ export default async function AuditDetailPage({
           </div>
         )}
       </form>
+
+      {isInProgress && (
+        <form action={cancelAudit} className="mt-3">
+          <input type="hidden" name="auditId" value={audit.id} />
+          <button
+            type="submit"
+            className="text-sm text-red-600 hover:underline"
+          >
+            Cancel this audit
+          </button>
+        </form>
+      )}
     </div>
   );
 }

@@ -118,6 +118,36 @@ export async function addAuditLine(formData: FormData) {
   revalidatePath(`/audits/${auditId}`);
 }
 
+// Abandons an in-progress audit — e.g. a test/dev-only count that was never
+// meant to be finalized. Only allowed pre-finalize, since a finalized audit
+// has already posted real DISCREPANCY transactions; cancelling one that far
+// along would need to reverse those, which isn't what "cancel" means here.
+export async function cancelAudit(formData: FormData) {
+  const auditId = String(formData.get("auditId") ?? "");
+  if (!auditId) return;
+
+  const audit = await db.audit.findUniqueOrThrow({ where: { id: auditId } });
+  if (audit.status !== "IN_PROGRESS") return;
+
+  await db.audit.update({ where: { id: auditId }, data: { status: "CANCELLED" } });
+
+  revalidatePath("/audits");
+  revalidatePath(`/audits/${auditId}`);
+}
+
+export async function reactivateAudit(formData: FormData) {
+  const auditId = String(formData.get("auditId") ?? "");
+  if (!auditId) return;
+
+  const audit = await db.audit.findUniqueOrThrow({ where: { id: auditId } });
+  if (audit.status !== "CANCELLED") return;
+
+  await db.audit.update({ where: { id: auditId }, data: { status: "IN_PROGRESS" } });
+
+  revalidatePath("/audits");
+  revalidatePath(`/audits/${auditId}`);
+}
+
 export async function updateAuditCounts(formData: FormData) {
   const auditId = String(formData.get("auditId") ?? "");
   const intent = String(formData.get("intent") ?? "save");

@@ -7,6 +7,7 @@ import {
   reopenReconciliation,
   deleteReconciliation,
   startAuditForReconciliation,
+  cancelReconciliation,
 } from "../actions";
 import DeleteReconciliationButton from "./delete-reconciliation-button";
 import CloseReconciliationForm from "./close-reconciliation-form";
@@ -49,7 +50,7 @@ export default async function ReconciliationDetailPage({
   const auditCandidates = reconciliation.audit
     ? []
     : await db.audit.findMany({
-        where: { siteId: reconciliation.siteId },
+        where: { siteId: reconciliation.siteId, status: { not: "CANCELLED" } },
         orderBy: { auditDate: "desc" },
       });
 
@@ -76,7 +77,9 @@ export default async function ReconciliationDetailPage({
             className={`rounded-full px-2 py-0.5 text-xs font-medium ${
               reconciliation.status === "CLOSED"
                 ? "bg-emerald-100 text-emerald-800"
-                : "bg-amber-100 text-amber-800"
+                : reconciliation.status === "CANCELLED"
+                  ? "bg-gray-100 text-gray-500"
+                  : "bg-amber-100 text-amber-800"
             }`}
           >
             {reconciliation.status}
@@ -196,6 +199,17 @@ export default async function ReconciliationDetailPage({
             reconciliationId={reconciliation.id}
             employees={employees}
           />
+        )}
+        {isOpen && (
+          <form action={cancelReconciliation}>
+            <input type="hidden" name="reconciliationId" value={reconciliation.id} />
+            <button
+              type="submit"
+              className="text-sm text-red-600 hover:underline"
+            >
+              Cancel
+            </button>
+          </form>
         )}
         {!isOpen && (
           <form action={reopenReconciliation}>

@@ -50,6 +50,26 @@ export async function createItem(
   redirect("/items");
 }
 
+// Retiring only proceeds when the item has zero on-hand across every site —
+// otherwise there'd be real inventory left pointing at a retired item with
+// no way to transact it further. Reactivating has no such guard.
+export async function setItemActive(formData: FormData) {
+  const itemId = String(formData.get("itemId") ?? "");
+  const isActive = formData.get("isActive") === "true";
+  if (!itemId) return;
+
+  if (!isActive) {
+    const { _sum } = await db.inventoryTransaction.aggregate({
+      where: { itemId },
+      _sum: { quantity: true },
+    });
+    if ((_sum.quantity ?? 0) !== 0) return;
+  }
+
+  await db.item.update({ where: { id: itemId }, data: { isActive } });
+  revalidatePath("/items");
+}
+
 export type UpdateItemState = { error?: string } | null;
 
 export async function updateItem(

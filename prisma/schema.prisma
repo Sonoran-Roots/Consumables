@@ -331,6 +331,7 @@ model CheckoutLine {
 enum AuditStatus {
   IN_PROGRESS
   FINALIZED
+  CANCELLED
 }
 
 model Audit {
@@ -381,6 +382,7 @@ model AuditLine {
 enum ReconciliationStatus {
   OPEN
   CLOSED
+  CANCELLED
 }
 
 model InventoryReconciliation {

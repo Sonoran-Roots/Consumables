@@ -27,12 +27,20 @@ export default async function ReconciliationListPage() {
             audit for that site to be linked.
           </p>
         </div>
-        <Link
-          href="/reconciliation/new"
-          className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700"
-        >
-          New reconciliation
-        </Link>
+        <div className="flex gap-2">
+          <Link
+            href="/reconciliation/report"
+            className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50"
+          >
+            Usage report
+          </Link>
+          <Link
+            href="/reconciliation/new"
+            className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+          >
+            New reconciliation
+          </Link>
+        </div>
       </div>
 
       <div className="mt-6 overflow-x-auto rounded-lg border border-gray-200 bg-white">
@@ -63,7 +71,9 @@ export default async function ReconciliationListPage() {
                     className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                       r.status === "CLOSED"
                         ? "bg-emerald-100 text-emerald-800"
-                        : "bg-amber-100 text-amber-800"
+                        : r.status === "CANCELLED"
+                          ? "bg-gray-100 text-gray-500"
+                          : "bg-amber-100 text-amber-800"
                     }`}
                   >
                     {r.status}
