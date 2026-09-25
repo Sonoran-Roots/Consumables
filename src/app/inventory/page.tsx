@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { db } from "@/lib/db";
 import SiteFilter from "./site-filter";
 
@@ -75,7 +76,12 @@ export default async function InventoryPage({
             {rows.map((row) => (
               <tr key={`${row.item.id}-${row.site.id}`}>
                 <td className="px-4 py-2 font-medium text-gray-900">
-                  {row.item.name}
+                  <Link
+                    href={`/inventory/${row.item.id}?site=${row.site.id}`}
+                    className="hover:underline"
+                  >
+                    {row.item.name}
+                  </Link>
                 </td>
                 <td className="px-4 py-2 text-gray-600">{row.site.name}</td>
                 <td className="px-4 py-2 text-gray-600">{row.item.category.name}</td>
