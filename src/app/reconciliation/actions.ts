@@ -289,18 +289,37 @@ export async function refreshReconciliation(formData: FormData) {
   revalidatePath(`/reconciliation/${reconciliationId}`);
 }
 
-export async function closeReconciliation(formData: FormData) {
+export type CloseReconciliationState = { error?: string } | null;
+
+// Gated on a finalized Audit for the same site being linked — the physical
+// count happens in the Audit screens; this just verifies one backs the
+// close instead of re-implementing counting here.
+export async function closeReconciliation(
+  _prevState: CloseReconciliationState,
+  formData: FormData
+): Promise<CloseReconciliationState> {
   const reconciliationId = String(formData.get("reconciliationId") ?? "");
   const closedById = String(formData.get("closedById") ?? "") || null;
-  if (!reconciliationId) return;
+  if (!reconciliationId) return { error: "Missing reconciliation." };
 
   const reconciliation = await db.inventoryReconciliation.findUniqueOrThrow({
     where: { id: reconciliationId },
+    include: { audit: true },
   });
-  if (reconciliation.status === "CLOSED") return;
+  if (reconciliation.status === "CLOSED") return null;
+
+  if (!reconciliation.audit) {
+    return { error: "Link a finalized audit for this site before closing." };
+  }
+  if (reconciliation.audit.status !== "FINALIZED") {
+    return {
+      error: "The linked audit hasn't been finalized yet — finish counting and finalize it first.",
+    };
+  }
 
   // Final recompute right before freezing, so the snapshot reflects
-  // anything entered right up to close time.
+  // anything entered right up to close time (including the audit's own
+  // discrepancy postings).
   const lines = await computeReconciliationLines(
     reconciliation.siteId,
     reconciliation.periodStart,
@@ -315,6 +334,77 @@ export async function closeReconciliation(formData: FormData) {
 
   revalidatePath("/reconciliation");
   revalidatePath(`/reconciliation/${reconciliationId}`);
+  redirect(`/reconciliation/${reconciliationId}`);
+}
+
+export type LinkAuditState = { error?: string } | null;
+
+export async function linkAudit(
+  _prevState: LinkAuditState,
+  formData: FormData
+): Promise<LinkAuditState> {
+  const reconciliationId = String(formData.get("reconciliationId") ?? "");
+  const auditId = String(formData.get("auditId") ?? "") || null;
+  if (!reconciliationId) return { error: "Missing reconciliation." };
+
+  const reconciliation = await db.inventoryReconciliation.findUniqueOrThrow({
+    where: { id: reconciliationId },
+  });
+
+  if (auditId) {
+    const audit = await db.audit.findUniqueOrThrow({ where: { id: auditId } });
+    if (audit.siteId !== reconciliation.siteId) {
+      return { error: "That audit is for a different site." };
+    }
+  }
+
+  await db.inventoryReconciliation.update({
+    where: { id: reconciliationId },
+    data: { auditId },
+  });
+
+  revalidatePath(`/reconciliation/${reconciliationId}`);
+  redirect(`/reconciliation/${reconciliationId}`);
+}
+
+// Starts a fresh audit for this reconciliation's site (same snapshot-based
+// creation as the standalone "New audit" flow) and links it immediately, so
+// the user lands on the audit ready to start counting.
+export async function startAuditForReconciliation(formData: FormData) {
+  const reconciliationId = String(formData.get("reconciliationId") ?? "");
+  if (!reconciliationId) return;
+
+  const reconciliation = await db.inventoryReconciliation.findUniqueOrThrow({
+    where: { id: reconciliationId },
+  });
+
+  const grouped = await db.inventoryTransaction.groupBy({
+    by: ["itemId"],
+    where: { siteId: reconciliation.siteId },
+    _sum: { quantity: true },
+  });
+  const nonZero = grouped.filter((g) => (g._sum.quantity ?? 0) !== 0);
+
+  const audit = await db.audit.create({
+    data: {
+      siteId: reconciliation.siteId,
+      auditDate: reconciliation.periodEnd,
+      lines: {
+        create: nonZero.map((g) => ({
+          itemId: g.itemId,
+          systemQtyAtAudit: g._sum.quantity ?? 0,
+        })),
+      },
+    },
+  });
+
+  await db.inventoryReconciliation.update({
+    where: { id: reconciliationId },
+    data: { auditId: audit.id },
+  });
+
+  revalidatePath(`/reconciliation/${reconciliationId}`);
+  redirect(`/audits/${audit.id}`);
 }
 
 // Deliberately unlocks a closed period for correction. The frozen numbers

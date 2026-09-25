@@ -23,7 +23,8 @@ export default async function ReconciliationListPage() {
           </h1>
           <p className="mt-1 text-sm text-gray-500">
             Period-close snapshots of ending inventory, transfer costs, and
-            usage rates per site — independent of physical audits.
+            usage rates per site — closing requires a finalized physical
+            audit for that site to be linked.
           </p>
         </div>
         <Link

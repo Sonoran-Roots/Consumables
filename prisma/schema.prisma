@@ -344,6 +344,7 @@ model Audit {
 
   lines                 AuditLine[]
   inventoryTransactions InventoryTransaction[]
+  reconciliations       InventoryReconciliation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -368,11 +369,13 @@ model AuditLine {
 // Inventory reconciliation — a period close (calendar month-end for the
 // legacy process, or a rolling 30-day window under the new parent company)
 // that snapshots ending quantities/values/usage per item at a site, computed
-// live from the ledger. Independent of Audits: it does not require a
-// physical count, since the new cadence needs to be able to close reliably
-// without someone remembering to run one. Closing freezes the numbers —
-// later ledger corrections don't retroactively change a closed period's
-// report, matching how the old company's month-end close worked.
+// live from the ledger. A reconciliation must have a finalized Audit for
+// the same site linked to it before it can be closed — the physical count
+// happens in the existing Audit screens, and closing just verifies one is
+// attached and finalized rather than re-implementing counting here. Closing
+// freezes the numbers — later ledger corrections don't retroactively change
+// a closed period's report, matching how the old company's month-end close
+// worked.
 // ---------------------------------------------------------------------------
 
 enum ReconciliationStatus {
@@ -389,6 +392,9 @@ model InventoryReconciliation {
   status      ReconciliationStatus @default(OPEN)
   notes       String?
 
+  audit   Audit?  @relation(fields: [auditId], references: [id])
+  auditId String?
+
   closedAt   DateTime?
   closedBy   Employee? @relation(fields: [closedById], references: [id])
   closedById String?
@@ -399,6 +405,7 @@ model InventoryReconciliation {
   updatedAt DateTime @updatedAt
 
   @@index([siteId, periodStart])
+  @@index([auditId])
 }
 
 // One row per item touched at the site during (or carried into) the period.

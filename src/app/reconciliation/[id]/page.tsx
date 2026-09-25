@@ -4,11 +4,13 @@ import { db } from "@/lib/db";
 import BackLink from "@/components/back-link";
 import {
   refreshReconciliation,
-  closeReconciliation,
   reopenReconciliation,
   deleteReconciliation,
+  startAuditForReconciliation,
 } from "../actions";
 import DeleteReconciliationButton from "./delete-reconciliation-button";
+import CloseReconciliationForm from "./close-reconciliation-form";
+import LinkAuditForm from "./link-audit-form";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +35,7 @@ export default async function ReconciliationDetailPage({
       include: {
         site: true,
         closedBy: true,
+        audit: true,
         lines: { include: { item: true }, orderBy: { item: { name: "asc" } } },
       },
     }),
@@ -42,6 +45,13 @@ export default async function ReconciliationDetailPage({
   if (!reconciliation) notFound();
 
   const isOpen = reconciliation.status === "OPEN";
+
+  const auditCandidates = reconciliation.audit
+    ? []
+    : await db.audit.findMany({
+        where: { siteId: reconciliation.siteId },
+        orderBy: { auditDate: "desc" },
+      });
 
   const totals = reconciliation.lines.reduce(
     (acc, l) => ({
@@ -120,6 +130,55 @@ export default async function ReconciliationDetailPage({
         </div>
       </div>
 
+      <section className="rounded-lg border border-gray-200 bg-white p-4">
+        <h2 className="text-sm font-medium text-gray-700">Linked audit</h2>
+        <p className="mt-1 text-xs text-gray-500">
+          A finalized audit for {reconciliation.site.name} must be linked
+          before this can close.
+        </p>
+        {reconciliation.audit ? (
+          <div className="mt-3 flex items-center gap-3 text-sm">
+            <Link
+              href={`/audits/${reconciliation.audit.id}`}
+              className="text-emerald-700 hover:underline"
+            >
+              {reconciliation.audit.auditDate.toLocaleDateString(undefined, {
+                timeZone: "UTC",
+              })}
+            </Link>
+            <span
+              className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                reconciliation.audit.status === "FINALIZED"
+                  ? "bg-emerald-100 text-emerald-800"
+                  : "bg-amber-100 text-amber-800"
+              }`}
+            >
+              {reconciliation.audit.status === "FINALIZED"
+                ? "Finalized"
+                : "In progress — not finalized yet"}
+            </span>
+          </div>
+        ) : (
+          <div className="mt-3 space-y-3">
+            <form action={startAuditForReconciliation}>
+              <input type="hidden" name="reconciliationId" value={reconciliation.id} />
+              <button
+                type="submit"
+                className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
+              >
+                Start a new audit for this site
+              </button>
+            </form>
+            {auditCandidates.length > 0 && (
+              <LinkAuditForm
+                reconciliationId={reconciliation.id}
+                candidates={auditCandidates}
+              />
+            )}
+          </div>
+        )}
+      </section>
+
       <div className="flex flex-wrap items-center gap-2">
         {isOpen && (
           <form action={refreshReconciliation}>
@@ -133,26 +192,10 @@ export default async function ReconciliationDetailPage({
           </form>
         )}
         {isOpen && (
-          <form action={closeReconciliation} className="flex items-center gap-2">
-            <input type="hidden" name="reconciliationId" value={reconciliation.id} />
-            <select
-              name="closedById"
-              className="rounded-md border border-gray-300 px-2 py-1.5 text-sm"
-            >
-              <option value="">Closed by…</option>
-              {employees.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.name}
-                </option>
-              ))}
-            </select>
-            <button
-              type="submit"
-              className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
-            >
-              Close period
-            </button>
-          </form>
+          <CloseReconciliationForm
+            reconciliationId={reconciliation.id}
+            employees={employees}
+          />
         )}
         {!isOpen && (
           <form action={reopenReconciliation}>
