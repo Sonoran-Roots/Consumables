@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { setSiteActive } from "./actions";
+import { setSiteActive, deleteBook } from "./actions";
+import DeleteBookButton from "./delete-book-button";
 
 export const dynamic = "force-dynamic";
 
@@ -44,8 +45,23 @@ export default async function SitesPage() {
           <div key={book.id} className="rounded-lg border border-gray-200 bg-white p-4">
             <div className="flex items-center justify-between">
               <h2 className="font-medium text-gray-900">{book.name}</h2>
-              <span className="rounded bg-gray-100 px-2 py-0.5 text-xs font-mono text-gray-600">
-                {book.code}
+              <span className="flex items-center gap-2">
+                <span className="rounded bg-gray-100 px-2 py-0.5 text-xs font-mono text-gray-600">
+                  {book.code}
+                </span>
+                {book.sites.length === 0 ? (
+                  <form action={deleteBook}>
+                    <input type="hidden" name="bookId" value={book.id} />
+                    <DeleteBookButton bookName={book.name} />
+                  </form>
+                ) : (
+                  <span
+                    className="text-xs text-gray-300"
+                    title="Remove all sites from this book before deleting it"
+                  >
+                    delete
+                  </span>
+                )}
               </span>
             </div>
             <ul className="mt-3 divide-y divide-gray-100">

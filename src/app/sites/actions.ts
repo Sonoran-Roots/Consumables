@@ -31,6 +31,17 @@ export async function createBook(
   redirect("/sites");
 }
 
+export async function deleteBook(formData: FormData) {
+  const bookId = String(formData.get("bookId") ?? "");
+  if (!bookId) return;
+
+  const siteCount = await db.site.count({ where: { bookId } });
+  if (siteCount > 0) return;
+
+  await db.book.delete({ where: { id: bookId } });
+  revalidatePath("/sites");
+}
+
 export type CreateSiteState = { error?: string } | null;
 
 export async function createSite(
