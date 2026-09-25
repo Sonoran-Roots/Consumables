@@ -90,9 +90,9 @@ export default async function UsageReportPage({
       <BackLink href="/reconciliation" label="Back to reconciliation" />
       <h1 className="text-xl font-semibold text-gray-900">Usage report</h1>
       <p className="mt-1 text-sm text-gray-500">
-        How much of each item was consumed (sales, net checkouts, damaged) at
-        each site during the period — for export and blending with other
-        production data to work out costs.
+        How much of each item was used or missing (sales, net checkouts,
+        damage, and audit discrepancies) at each site during the period — for
+        export and blending with other production data to work out costs.
       </p>
 
       <form className="mt-4 flex items-end gap-2" method="get">

@@ -1,10 +1,15 @@
 import { db } from "@/lib/db";
 import type { TransactionType } from "@prisma/client";
 
-// Usage/consumption, as a positive magnitude — sales, net checkouts (a
-// return gives some back), and damage. Shared between the reconciliation
-// snapshot below and the item detail page's utilization trend, so both
-// agree on what counts as "used."
+// "Used or missing inventory" — sales, net checkouts (a return gives some
+// back), damage, and audit discrepancies, all as a signed contribution to
+// how much left the shelf. A negative audit discrepancy (counted less than
+// the system expected) counts as usage: if there's no other explanation for
+// where it went, it was most likely used or lost without ever being logged
+// as a checkout. A positive discrepancy (found more than expected) offsets
+// that the same way a checkout return offsets a checkout. Shared between
+// the reconciliation snapshot below and the item detail page's utilization
+// trend, so both agree on what counts as "used."
 export function consumptionDelta(type: TransactionType, quantity: number): number {
   switch (type) {
     case "SALE":
@@ -14,6 +19,8 @@ export function consumptionDelta(type: TransactionType, quantity: number): numbe
       return Math.abs(quantity);
     case "CHECKOUT_RETURN":
       return -Math.abs(quantity);
+    case "DISCREPANCY":
+      return -quantity;
     default:
       return 0;
   }
@@ -130,17 +137,16 @@ export async function computeReconciliationLines(
         b.transferOutQty += Math.abs(qty);
         b.transferOutValue += Math.abs(val);
         break;
+      case "DISCREPANCY":
+        b.discrepancyQty += qty;
+        b.consumedQty += consumptionDelta(row.type, qty);
+        break;
       case "SALE":
       case "SALE_OUT_OF_STATE":
       case "DAMAGED":
       case "CHECKOUT":
-        b.consumedQty += Math.abs(qty);
-        break;
       case "CHECKOUT_RETURN":
-        b.consumedQty -= Math.abs(qty);
-        break;
-      case "DISCREPANCY":
-        b.discrepancyQty += qty;
+        b.consumedQty += consumptionDelta(row.type, qty);
         break;
       default:
         break;

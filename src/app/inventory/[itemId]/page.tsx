@@ -77,7 +77,16 @@ export default async function ItemInventoryDetailPage({
           where: {
             itemId,
             siteId,
-            type: { in: ["SALE", "SALE_OUT_OF_STATE", "CHECKOUT", "CHECKOUT_RETURN", "DAMAGED"] },
+            type: {
+              in: [
+                "SALE",
+                "SALE_OUT_OF_STATE",
+                "CHECKOUT",
+                "CHECKOUT_RETURN",
+                "DAMAGED",
+                "DISCREPANCY",
+              ],
+            },
           },
           orderBy: { occurredAt: "asc" },
           select: { occurredAt: true, type: true, quantity: true },
@@ -330,7 +339,8 @@ export default async function ItemInventoryDetailPage({
             Utilization &amp; par level at {selectedSite.name}
           </h2>
           <p className="mt-1 text-xs text-gray-500">
-            Based on sales, net checkouts, and damage recorded at this site.{" "}
+            Based on sales, net checkouts, damage, and audit discrepancies
+            (used or missing inventory) recorded at this site.{" "}
             {daysOfHistory > 0
               ? `Covers ${daysOfHistory} day${daysOfHistory === 1 ? "" : "s"} of history.`
               : "No usage history recorded here yet."}

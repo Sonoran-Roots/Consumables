@@ -256,8 +256,11 @@ export default async function ReconciliationDetailPage({
                 <th className="py-1.5 pr-3 text-right font-medium text-gray-500">
                   Transfer out
                 </th>
-                <th className="py-1.5 pr-3 text-right font-medium text-gray-500">
-                  Consumed
+                <th
+                  className="py-1.5 pr-3 text-right font-medium text-gray-500"
+                  title="Sales, net checkouts, damage, and audit discrepancies (used or missing inventory)"
+                >
+                  Used/missing
                 </th>
                 <th className="py-1.5 pr-3 text-right font-medium text-gray-500">
                   Usage/day
