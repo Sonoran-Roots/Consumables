@@ -1,0 +1,447 @@
+// Sonoranroots Inventory — v1 data model
+// See ANALYSIS.md (Downloads/consumables) for the full rationale behind this design;
+// it replaces the Google-Sheets/IMPORTRANGE system documented there.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Organizational structure
+// ---------------------------------------------------------------------------
+
+model Book {
+  id    String @id @default(cuid())
+  name  String @unique // Retail, Cultivation, Manufacturing, Joint Venture/Admin
+  code  String @unique // short code, e.g. RTL, CUL, MFG, JVA
+  sites Site[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Site {
+  id         String  @id @default(cuid())
+  book       Book    @relation(fields: [bookId], references: [id])
+  bookId     String
+  name       String
+  code       String  @unique
+  isStaging  Boolean @default(false) // e.g. "The Highway" intake/staging tabs
+  isActive   Boolean @default(true) // replaces hiding retired-site tabs
+  address    String?
+  type       SiteType @default(FACILITY)
+
+  employees        Employee[]
+  transactions     InventoryTransaction[]
+  transfersFrom    Transfer[]             @relation("TransferFromSite")
+  transfersTo      Transfer[]             @relation("TransferToSite")
+  checkoutEvents   CheckoutEvent[]
+  audits           Audit[]
+  purchaseOrders   PurchaseOrder[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([bookId])
+}
+
+enum SiteType {
+  FACILITY // a real physical site people work at
+  STAGING // e.g. "The Highway" intake tabs
+  VIRTUAL // e.g. an out-of-state sales channel like Alaska
+}
+
+model Employee {
+  id       String  @id @default(cuid())
+  name     String
+  initials String? // for mapping legacy "who did this" data
+  site     Site?   @relation(fields: [siteId], references: [id])
+  siteId   String?
+  isActive Boolean @default(true)
+
+  inventoryTransactions InventoryTransaction[]
+  transfersRequested    Transfer[]      @relation("TransferRequestedBy")
+  transfersReceived     Transfer[]      @relation("TransferReceivedBy")
+  checkoutEvents        CheckoutEvent[]
+  auditsPerformed       Audit[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([siteId])
+}
+
+// ---------------------------------------------------------------------------
+// Item master data
+// ---------------------------------------------------------------------------
+
+model Category {
+  id             String     @id @default(cuid())
+  name           String     @unique // the ~14 consolidated categories
+  parent         Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  parentId       String?
+  children       Category[] @relation("CategoryHierarchy")
+  legacyCode     String? // e.g. CM, PM, SRM
+
+  items           Item[]
+  legacyAliases   LegacyCategoryAlias[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Maps the 24 raw/legacy spreadsheet category names onto the consolidated
+// taxonomy above, so historical data/imports don't require manual re-tagging.
+model LegacyCategoryAlias {
+  id              String   @id @default(cuid())
+  rawCategoryName String   @unique
+  category        Category @relation(fields: [categoryId], references: [id])
+  categoryId      String
+}
+
+enum MaterialType {
+  DM // Direct Material
+  IM // Indirect Material
+  PM // Packaging Material
+  MM // Marketing Material
+  AFS // Available for Sale / Finished Product
+  NA // Not applicable
+}
+
+model UnitOfMeasure {
+  id          String  @id @default(cuid())
+  code        String  @unique // Unit, Bundle, Filter, Bag, Case, Box, Gallon, Roll...
+  description String?
+
+  items Item[]
+}
+
+model Vendor {
+  id       String  @id @default(cuid())
+  name     String  @unique
+  isActive Boolean @default(true)
+
+  items                 Item[]
+  inventoryTransactions InventoryTransaction[]
+  purchaseOrders        PurchaseOrder[]
+  vendorCredits         VendorCredit[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Item {
+  id               String        @id @default(cuid())
+  legacyId         String?       @unique // old EEA2CAD### string, kept for migration reference
+  sku              String?       @unique
+  name             String        @unique // canonical display name; real uniqueness enforced here (not free text everywhere)
+  brand            String?
+  genericName      String?
+  variant          String? // Strain / Color / Model
+  size             String? // Size / Weight / Dimensions
+  specialAttribute String?
+
+  category       Category      @relation(fields: [categoryId], references: [id])
+  categoryId     String
+  materialType   MaterialType  @default(NA)
+  defaultUom     UnitOfMeasure @relation(fields: [defaultUomId], references: [id])
+  defaultUomId   String
+  defaultVendor  Vendor?       @relation(fields: [defaultVendorId], references: [id])
+  defaultVendorId String?
+  isActive       Boolean       @default(true)
+
+  inventoryTransactions InventoryTransaction[]
+  transferLines         TransferLine[]
+  checkoutLines         CheckoutLine[]
+  auditLines            AuditLine[]
+  purchaseOrderLines    PurchaseOrderLine[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([categoryId])
+}
+
+// ---------------------------------------------------------------------------
+// The single inventory ledger — replaces the whole IMPORTRANGE chain
+// (Master tabs, The Highway, Check Out Log, Discrepancy adjustments).
+// Current on-hand per item/site = SUM(quantity) WHERE itemId=? AND siteId=?
+// ---------------------------------------------------------------------------
+
+enum TransactionType {
+  OPENING_BALANCE // initial on-hand qty entered via CSV import at cutover, not a real business event
+  PURCHASE
+  SALE
+  SALE_OUT_OF_STATE // legacy "Sale (AK)"
+  PRODUCTION
+  TRANSFER_OUT
+  TRANSFER_IN
+  DISCREPANCY
+  CHECKOUT
+  CHECKOUT_RETURN
+  DAMAGED
+}
+
+model InventoryTransaction {
+  id       String          @id @default(cuid())
+  item     Item            @relation(fields: [itemId], references: [id])
+  itemId   String
+  type     TransactionType
+  site     Site            @relation(fields: [siteId], references: [id])
+  siteId   String
+  quantity Float // signed: positive = increases on-hand, negative = decreases
+  unitCost Float?
+  totalValue Float? // denormalized qty * unitCost, kept in sync at write time
+
+  vendor   Vendor? @relation(fields: [vendorId], references: [id])
+  vendorId String?
+
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+  purchaseOrderId String?
+
+  purchaseOrderLine   PurchaseOrderLine? @relation(fields: [purchaseOrderLineId], references: [id])
+  purchaseOrderLineId String?
+
+  transfer   Transfer? @relation(fields: [transferId], references: [id])
+  transferId String?
+
+  checkoutEvent   CheckoutEvent? @relation(fields: [checkoutEventId], references: [id])
+  checkoutEventId String?
+
+  audit   Audit? @relation(fields: [auditId], references: [id])
+  auditId String?
+
+  employee   Employee? @relation(fields: [employeeId], references: [id])
+  employeeId String?
+
+  occurredAt DateTime @default(now())
+  notes      String?
+  createdAt  DateTime @default(now())
+  createdBy  String? // free-text fallback until Entra ID auth is wired in
+
+  @@index([itemId, siteId])
+  @@index([siteId, occurredAt])
+  @@index([transferId])
+  @@index([checkoutEventId])
+  @@index([purchaseOrderLineId])
+}
+
+// ---------------------------------------------------------------------------
+// Transfers between sites — the workflow the spreadsheet system never had:
+// a real header, a status, and native cross-book support.
+// ---------------------------------------------------------------------------
+
+enum TransferStatus {
+  REQUESTED
+  IN_TRANSIT
+  RECEIVED
+  CANCELLED
+}
+
+model Transfer {
+  id     String @id @default(cuid())
+  status TransferStatus @default(REQUESTED)
+
+  fromSite   Site   @relation("TransferFromSite", fields: [fromSiteId], references: [id])
+  fromSiteId String
+  toSite     Site   @relation("TransferToSite", fields: [toSiteId], references: [id])
+  toSiteId   String
+
+  requestedBy   Employee? @relation("TransferRequestedBy", fields: [requestedById], references: [id])
+  requestedById String?
+  receivedBy    Employee? @relation("TransferReceivedBy", fields: [receivedById], references: [id])
+  receivedById  String?
+
+  requestedAt DateTime  @default(now())
+  receivedAt  DateTime?
+  notes       String?
+
+  lines                 TransferLine[]
+  inventoryTransactions InventoryTransaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([fromSiteId])
+  @@index([toSiteId])
+  @@index([status])
+}
+
+model TransferLine {
+  id         String   @id @default(cuid())
+  transfer   Transfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  transferId String
+  item       Item     @relation(fields: [itemId], references: [id])
+  itemId     String
+  quantity   Float
+  unitCost   Float?
+
+  @@index([transferId])
+}
+
+// ---------------------------------------------------------------------------
+// Checkouts — replaces the central "Check Out Log" workbook. Every event is
+// tied to a real employee and (optionally) a purpose, which the old system
+// never captured.
+// ---------------------------------------------------------------------------
+
+model CheckoutEvent {
+  id         String    @id @default(cuid())
+  site       Site      @relation(fields: [siteId], references: [id])
+  siteId     String
+  employee   Employee  @relation(fields: [employeeId], references: [id])
+  employeeId String
+  occurredAt DateTime  @default(now())
+  department String?
+  purpose    String?
+  notes      String?
+  isReturn   Boolean   @default(false)
+
+  lines                 CheckoutLine[]
+  inventoryTransactions InventoryTransaction[]
+
+  createdAt DateTime @default(now())
+
+  @@index([siteId, occurredAt])
+}
+
+model CheckoutLine {
+  id              String        @id @default(cuid())
+  checkoutEvent   CheckoutEvent @relation(fields: [checkoutEventId], references: [id], onDelete: Cascade)
+  checkoutEventId String
+  item            Item          @relation(fields: [itemId], references: [id])
+  itemId          String
+  quantity        Float // unsigned; direction implied by CheckoutEvent.isReturn
+
+  @@index([checkoutEventId])
+}
+
+// ---------------------------------------------------------------------------
+// Audits — replaces "new tab every month per site". Finalizing a line with a
+// nonzero variance generates a DISCREPANCY row in InventoryTransaction.
+// ---------------------------------------------------------------------------
+
+enum AuditStatus {
+  IN_PROGRESS
+  FINALIZED
+}
+
+model Audit {
+  id            String      @id @default(cuid())
+  site          Site        @relation(fields: [siteId], references: [id])
+  siteId        String
+  auditDate     DateTime
+  performedBy   Employee?   @relation(fields: [performedById], references: [id])
+  performedById String?
+  status        AuditStatus @default(IN_PROGRESS)
+
+  lines                 AuditLine[]
+  inventoryTransactions InventoryTransaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([siteId, auditDate])
+}
+
+model AuditLine {
+  id               String @id @default(cuid())
+  audit            Audit  @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  auditId          String
+  item             Item   @relation(fields: [itemId], references: [id])
+  itemId           String
+  systemQtyAtAudit Float // snapshot of computed on-hand when the audit line was opened
+  countedQty       Float?
+  notes            String?
+
+  @@index([auditId])
+}
+
+// ---------------------------------------------------------------------------
+// Purchasing — minimal v1 support, linked by PO number, replacing the
+// separate Purchasing/EOM Prepaid Inventory Report & Credit Tracking workbook.
+// ---------------------------------------------------------------------------
+
+enum PurchaseOrderStatus {
+  OPEN
+  PARTIALLY_RECEIVED
+  FULLY_RECEIVED
+  CLOSED
+}
+
+// A PO is invoice-shaped: a header plus real line items, received at a
+// single site (possibly over several partial deliveries — see
+// PurchaseOrderLine below for how partial receiving is tracked and how it
+// auto-posts to the inventory ledger).
+model PurchaseOrder {
+  id         String              @id @default(cuid())
+  site       Site                @relation(fields: [siteId], references: [id])
+  siteId     String
+  vendor     Vendor              @relation(fields: [vendorId], references: [id])
+  vendorId   String
+  poNumber   String              @unique
+  orderDate  DateTime
+  status     PurchaseOrderStatus @default(OPEN)
+  paidInFull Boolean             @default(false)
+  notes      String?
+
+  lines                 PurchaseOrderLine[]
+  payments              PurchaseOrderPayment[]
+  inventoryTransactions InventoryTransaction[]
+  vendorCredits         VendorCredit[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([siteId])
+  @@index([vendorId])
+}
+
+// One row per item on the PO — the actual invoice line: what was ordered,
+// how much, and at what cost. Quantity received to date for a line =
+// SUM(InventoryTransaction.quantity) WHERE purchaseOrderLineId = this line's
+// id; each delivery recorded against a line posts a real PURCHASE
+// transaction at the PO's site, so receiving directly drives on-hand.
+model PurchaseOrderLine {
+  id              String        @id @default(cuid())
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  purchaseOrderId String
+  item            Item          @relation(fields: [itemId], references: [id])
+  itemId          String
+  quantityOrdered Float
+  unitCost        Float
+
+  inventoryTransactions InventoryTransaction[]
+
+  @@index([purchaseOrderId])
+}
+
+model PurchaseOrderPayment {
+  id              String        @id @default(cuid())
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  purchaseOrderId String
+  paymentDate     DateTime
+  amount          Float
+
+  @@index([purchaseOrderId])
+}
+
+model VendorCredit {
+  id                String         @id @default(cuid())
+  vendor            Vendor         @relation(fields: [vendorId], references: [id])
+  vendorId          String
+  purchaseOrder     PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+  purchaseOrderId   String?
+  creditDate        DateTime
+  amount            Float
+  accountingNotified Boolean       @default(false)
+  notes             String?
+
+  createdAt DateTime @default(now())
+
+  @@index([vendorId])
+}
