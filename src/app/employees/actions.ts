@@ -24,6 +24,15 @@ export async function createEmployee(
   redirect("/employees");
 }
 
+export async function resetEmployeeKioskPin(employeeId: string) {
+  if (!employeeId) return;
+  await db.employee.update({
+    where: { id: employeeId },
+    data: { pinHash: null },
+  });
+  revalidatePath(`/employees/${employeeId}/edit`);
+}
+
 export type UpdateEmployeeState = { error?: string } | null;
 
 export async function updateEmployee(

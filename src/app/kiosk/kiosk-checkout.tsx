@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useActionState } from "react";
-import { logKioskCheckout } from "../checkouts/actions";
+import { logKioskCheckout, confirmKioskPin } from "../checkouts/actions";
 import {
   ChevronDownIcon,
   SearchIcon,
@@ -9,11 +9,13 @@ import {
   CheckCircleIcon,
   XIcon,
 } from "@/components/icons";
+import PinPad from "./pin-pad";
 
 type Site = { id: string; name: string };
-type Employee = { id: string; name: string };
+type Employee = { id: string; name: string; hasPin: boolean };
 type Item = { id: string; name: string; sku: string | null };
 type CartLine = { itemId: string; name: string; quantity: number };
+type PinPhase = "verify" | "create-step1" | "create-step2" | null;
 
 const SITE_KEY = "kiosk-site-id";
 
@@ -33,6 +35,17 @@ export default function KioskCheckout({
   const [query, setQuery] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
   const [state, formAction, pending] = useActionState(logKioskCheckout, null);
+
+  // PIN verifies who's actually checking out on this shared, location-signed
+  // tablet — see confirmKioskPin. confirmedPin is only set once the server
+  // has verified (or, first use, created) it; nothing below the PIN step
+  // shows until then.
+  const [pinPhase, setPinPhase] = useState<PinPhase>(null);
+  const [pinValue, setPinValue] = useState("");
+  const [pinDraft, setPinDraft] = useState("");
+  const [pinError, setPinError] = useState<string | null>(null);
+  const [pinPending, setPinPending] = useState(false);
+  const [confirmedPin, setConfirmedPin] = useState<string | null>(null);
 
   // Remembered per-device — a kiosk tablet lives at one site, so staff
   // shouldn't have to repick it before every checkout.
@@ -71,8 +84,65 @@ export default function KioskCheckout({
       setCart([]);
       setEmployeeId(null);
       setQuery("");
+      setConfirmedPin(null);
+      setPinPhase(null);
+      setPinValue("");
+      setPinDraft("");
+      setPinError(null);
     }
   }, [state]);
+
+  function selectEmployee(id: string) {
+    setEmployeeId(id || null);
+    setConfirmedPin(null);
+    setPinValue("");
+    setPinDraft("");
+    setPinError(null);
+    const employee = employees.find((e) => e.id === id);
+    setPinPhase(id ? (employee?.hasPin ? "verify" : "create-step1") : null);
+  }
+
+  async function confirmPin(pin: string) {
+    if (!employeeId) return;
+    setPinPending(true);
+    const result = await confirmKioskPin(employeeId, pin);
+    setPinPending(false);
+    if (result.ok) {
+      setConfirmedPin(pin);
+      setPinPhase(null);
+      setPinValue("");
+    } else {
+      setPinError(result.error);
+      setPinValue("");
+      if (pinPhase === "create-step2") {
+        setPinPhase("create-step1");
+        setPinDraft("");
+      }
+    }
+  }
+
+  function handlePinChange(next: string) {
+    setPinError(null);
+    setPinValue(next);
+    if (next.length < 4) return;
+
+    if (pinPhase === "verify") {
+      void confirmPin(next);
+    } else if (pinPhase === "create-step1") {
+      setPinDraft(next);
+      setPinPhase("create-step2");
+      setPinValue("");
+    } else if (pinPhase === "create-step2") {
+      if (next === pinDraft) {
+        void confirmPin(next);
+      } else {
+        setPinError("PINs didn't match — try again.");
+        setPinPhase("create-step1");
+        setPinDraft("");
+        setPinValue("");
+      }
+    }
+  }
 
   const results = useMemo(() => {
     if (!query.trim()) return [];
@@ -148,7 +218,9 @@ export default function KioskCheckout({
   }
 
   const site = sites.find((s) => s.id === siteId);
-  const canSubmit = !!employeeId && cart.length > 0 && !pending;
+  const selectedEmployee = employees.find((e) => e.id === employeeId);
+  const identityConfirmed = !!employeeId && !!confirmedPin;
+  const canSubmit = identityConfirmed && cart.length > 0 && !pending;
   const totalUnits = cart.reduce((sum, l) => sum + l.quantity, 0);
 
   return (
@@ -199,7 +271,7 @@ export default function KioskCheckout({
             <select
               id="kiosk-employee"
               value={employeeId ?? ""}
-              onChange={(e) => setEmployeeId(e.target.value || null)}
+              onChange={(e) => selectEmployee(e.target.value)}
               className="w-full appearance-none rounded-xl border border-gray-300 bg-white py-3 pl-4 pr-10 text-lg text-gray-900"
             >
               <option value="" disabled>
@@ -215,82 +287,116 @@ export default function KioskCheckout({
           </div>
         </div>
 
-        <div className="relative mb-4">
-          <SearchIcon className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search item…"
-            className="w-full rounded-xl border border-gray-300 bg-white py-3 pl-11 pr-4 text-lg shadow-sm"
-          />
-          {results.length > 0 && (
-            <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg">
-              {results.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => addItem(item)}
-                  className="flex w-full items-center justify-between border-b border-gray-100 px-4 py-3 text-left last:border-0 active:bg-[#eef6f0]"
+        {pinPhase && employeeId && (
+          <div className="mb-4">
+            <PinPad
+              title={
+                pinPhase === "verify"
+                  ? `Enter PIN for ${selectedEmployee?.name}`
+                  : pinPhase === "create-step1"
+                    ? `Create a PIN for ${selectedEmployee?.name}`
+                    : "Confirm your PIN"
+              }
+              subtitle={
+                pinPhase === "create-step1"
+                  ? "You'll use this 4-digit PIN each time you check out items."
+                  : undefined
+              }
+              value={pinValue}
+              error={pinError}
+              disabled={pinPending}
+              onChange={handlePinChange}
+            />
+          </div>
+        )}
+
+        {!employeeId && (
+          <div className="flex flex-col items-center gap-2 py-10 text-gray-400">
+            <UserIcon className="h-8 w-8" />
+            <p>Pick who this is to get started.</p>
+          </div>
+        )}
+
+        {identityConfirmed && (
+          <>
+            <div className="relative mb-4">
+              <SearchIcon className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search item…"
+                className="w-full rounded-xl border border-gray-300 bg-white py-3 pl-11 pr-4 text-lg shadow-sm"
+              />
+              {results.length > 0 && (
+                <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg">
+                  {results.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => addItem(item)}
+                      className="flex w-full items-center justify-between border-b border-gray-100 px-4 py-3 text-left last:border-0 active:bg-[#eef6f0]"
+                    >
+                      <span className="text-base text-gray-900">{item.name}</span>
+                      {item.sku && (
+                        <span className="ml-3 shrink-0 font-mono text-xs text-gray-400">
+                          {item.sku}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              {cart.length === 0 && (
+                <div className="flex flex-col items-center gap-2 py-10 text-gray-400">
+                  <SearchIcon className="h-8 w-8" />
+                  <p>Search above to add items.</p>
+                </div>
+              )}
+              {cart.length > 0 && (
+                <p className="px-1 text-xs font-medium uppercase tracking-wide text-gray-400">
+                  {cart.length} item{cart.length === 1 ? "" : "s"} · {totalUnits} unit
+                  {totalUnits === 1 ? "" : "s"}
+                </p>
+              )}
+              {cart.map((line) => (
+                <div
+                  key={line.itemId}
+                  className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-3 shadow-sm"
                 >
-                  <span className="text-base text-gray-900">{item.name}</span>
-                  {item.sku && (
-                    <span className="ml-3 shrink-0 font-mono text-xs text-gray-400">
-                      {item.sku}
-                    </span>
-                  )}
-                </button>
+                  <span className="flex-1 text-base text-gray-900">{line.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => updateQty(line.itemId, -1)}
+                    className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-lg font-medium text-gray-700 active:bg-gray-200"
+                  >
+                    −
+                  </button>
+                  <span className="w-8 text-center text-lg font-medium tabular-nums">
+                    {line.quantity}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => updateQty(line.itemId, 1)}
+                    className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-lg font-medium text-gray-700 active:bg-gray-200"
+                  >
+                    +
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeLine(line.itemId)}
+                    className="ml-1 flex h-9 w-9 items-center justify-center rounded-full text-gray-400 active:bg-gray-100 active:text-red-600"
+                    title="Remove"
+                  >
+                    <XIcon className="h-4 w-4" />
+                  </button>
+                </div>
               ))}
             </div>
-          )}
-        </div>
-
-        <div className="space-y-2">
-          {cart.length === 0 && (
-            <div className="flex flex-col items-center gap-2 py-10 text-gray-400">
-              <SearchIcon className="h-8 w-8" />
-              <p>Search above to add items.</p>
-            </div>
-          )}
-          {cart.length > 0 && (
-            <p className="px-1 text-xs font-medium uppercase tracking-wide text-gray-400">
-              {cart.length} item{cart.length === 1 ? "" : "s"} · {totalUnits} unit
-              {totalUnits === 1 ? "" : "s"}
-            </p>
-          )}
-          {cart.map((line) => (
-            <div
-              key={line.itemId}
-              className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-3 shadow-sm"
-            >
-              <span className="flex-1 text-base text-gray-900">{line.name}</span>
-              <button
-                type="button"
-                onClick={() => updateQty(line.itemId, -1)}
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-lg font-medium text-gray-700 active:bg-gray-200"
-              >
-                −
-              </button>
-              <span className="w-8 text-center text-lg font-medium tabular-nums">
-                {line.quantity}
-              </span>
-              <button
-                type="button"
-                onClick={() => updateQty(line.itemId, 1)}
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-lg font-medium text-gray-700 active:bg-gray-200"
-              >
-                +
-              </button>
-              <button
-                type="button"
-                onClick={() => removeLine(line.itemId)}
-                className="ml-1 flex h-9 w-9 items-center justify-center rounded-full text-gray-400 active:bg-gray-100 active:text-red-600"
-                title="Remove"
-              >
-                <XIcon className="h-4 w-4" />
-              </button>
-            </div>
-          ))}
-        </div>
+          </>
+        )}
 
         {state?.error && (
           <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -311,6 +417,7 @@ export default function KioskCheckout({
       >
         <input type="hidden" name="siteId" value={siteId} />
         <input type="hidden" name="employeeId" value={employeeId ?? ""} />
+        <input type="hidden" name="pin" value={confirmedPin ?? ""} />
         <input type="hidden" name="isReturn" value={String(isReturn)} />
         {cart.map((line) => (
           <span key={line.itemId}>
@@ -318,12 +425,12 @@ export default function KioskCheckout({
             <input type="hidden" name="quantity" value={line.quantity} />
           </span>
         ))}
-        {!canSubmit && (cart.length === 0 || !employeeId) && (
+        {!canSubmit && !pending && (
           <p className="mb-2 text-center text-xs text-gray-400">
-            {!employeeId && cart.length === 0
-              ? "Pick who this is for and add at least one item."
-              : !employeeId
-                ? "Pick who this is for."
+            {!employeeId
+              ? "Pick who this is for."
+              : !confirmedPin
+                ? "Confirm your PIN above."
                 : "Add at least one item."}
           </p>
         )}

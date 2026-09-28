@@ -63,6 +63,14 @@ model Employee {
   site     Site?   @relation(fields: [siteId], references: [id])
   siteId   String?
   isActive Boolean @default(true)
+  // Kiosk PIN (salted+hashed, see src/lib/pin.ts) — verifies who's actually
+  // doing a checkout on a shared, location-signed-in tablet, since kiosk
+  // staff don't have their own Better Auth accounts. Null = not set up yet;
+  // the kiosk prompts to create one on first use (soft rollout, not
+  // required app-wide). Self-serve by design: an employee sets their own
+  // PIN at the kiosk; an admin can only clear it (forces re-creation) via
+  // the employee edit page, never set/view its value.
+  pinHash  String?
 
   inventoryTransactions InventoryTransaction[]
   transfersRequested    Transfer[]                @relation("TransferRequestedBy")

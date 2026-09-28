@@ -13,7 +13,7 @@ export default async function KioskPage() {
     db.employee.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
-      select: { id: true, name: true },
+      select: { id: true, name: true, pinHash: true },
     }),
     db.item.findMany({
       where: { isActive: true },
@@ -22,5 +22,12 @@ export default async function KioskPage() {
     }),
   ]);
 
-  return <KioskCheckout sites={sites} employees={employees} items={items} />;
+  // Never send the hash itself to the client — just whether one exists.
+  const employeesWithPinFlag = employees.map(({ id, name, pinHash }) => ({
+    id,
+    name,
+    hasPin: pinHash != null,
+  }));
+
+  return <KioskCheckout sites={sites} employees={employeesWithPinFlag} items={items} />;
 }

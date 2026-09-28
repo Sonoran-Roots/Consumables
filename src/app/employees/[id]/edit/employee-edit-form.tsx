@@ -1,17 +1,31 @@
 "use client";
 
-import { useActionState } from "react";
-import { updateEmployee } from "../../actions";
+import { useActionState, useState, useTransition } from "react";
+import { updateEmployee, resetEmployeeKioskPin } from "../../actions";
 import type { Employee, Site } from "@prisma/client";
 
 export default function EmployeeEditForm({
   employee,
   sites,
+  hasPin,
 }: {
-  employee: Employee;
+  employee: Omit<Employee, "pinHash">;
   sites: Site[];
+  hasPin: boolean;
 }) {
   const [state, formAction, pending] = useActionState(updateEmployee, null);
+  const [pinCleared, setPinCleared] = useState(false);
+  const [resetting, startReset] = useTransition();
+
+  function handleResetPin() {
+    if (!confirm(`Clear ${employee.name}'s kiosk PIN? They'll set a new one next time they check out at a kiosk.`)) {
+      return;
+    }
+    startReset(async () => {
+      await resetEmployeeKioskPin(employee.id);
+      setPinCleared(true);
+    });
+  }
 
   return (
     <form action={formAction} className="space-y-4">
@@ -66,6 +80,33 @@ export default function EmployeeEditForm({
         />
         Active
       </label>
+
+      <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
+        <p className="text-sm font-medium text-gray-700">Kiosk PIN</p>
+        {pinCleared || !hasPin ? (
+          <p className="mt-1 text-sm text-gray-500">
+            {pinCleared
+              ? "Cleared — they'll be prompted to set a new one next time they check out at a kiosk."
+              : "Not set yet — they'll be prompted to create one the first time they check out at a kiosk."}
+          </p>
+        ) : (
+          <>
+            <p className="mt-1 text-sm text-gray-500">
+              Set. It's stored hashed — nobody, including you, can view it. If they forgot it,
+              clear it below and they'll set a new one at the kiosk.
+            </p>
+            <button
+              type="button"
+              onClick={handleResetPin}
+              disabled={resetting}
+              className="mt-2 rounded-md px-3 py-1.5 text-sm font-medium text-red-700 ring-1 ring-red-200 hover:bg-red-50 disabled:opacity-50"
+            >
+              {resetting ? "Clearing…" : "Clear PIN"}
+            </button>
+          </>
+        )}
+      </div>
+
       <button
         type="submit"
         disabled={pending}
