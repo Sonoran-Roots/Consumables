@@ -21,7 +21,7 @@ export default async function AuditsPage() {
         </div>
         <Link
           href="/audits/new"
-          className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+          className="rounded-md border border-black bg-black px-3 py-2 text-sm font-medium text-white hover:bg-white hover:text-black"
         >
           New audit
         </Link>
@@ -47,7 +47,7 @@ export default async function AuditsPage() {
                 <td className="px-4 py-2 text-gray-600">
                   <Link
                     href={`/audits/${a.id}`}
-                    className="text-emerald-700 hover:underline"
+                    className="text-[#134229] hover:underline"
                   >
                     {a.auditDate.toLocaleDateString(undefined, { timeZone: "UTC" })}
                   </Link>
@@ -61,7 +61,7 @@ export default async function AuditsPage() {
                   <span
                     className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                       a.status === "FINALIZED"
-                        ? "bg-emerald-100 text-emerald-800"
+                        ? "bg-[#e5f3e5] text-[#134229]"
                         : a.status === "CANCELLED"
                           ? "bg-gray-100 text-gray-500"
                           : "bg-amber-100 text-amber-800"
@@ -73,7 +73,7 @@ export default async function AuditsPage() {
                 <td className="px-4 py-2 text-right">
                   <Link
                     href={`/audits/${a.id}`}
-                    className="text-emerald-700 hover:underline"
+                    className="text-[#134229] hover:underline"
                   >
                     View
                   </Link>
@@ -84,7 +84,7 @@ export default async function AuditsPage() {
               <tr>
                 <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
                   No audits yet.{" "}
-                  <Link href="/audits/new" className="text-emerald-700 underline">
+                  <Link href="/audits/new" className="text-[#134229] underline">
                     Start one
                   </Link>
                   .

@@ -155,7 +155,7 @@ export default function InterBookTable({
                     <td
                       className={`px-3 py-1.5 text-right tabular-nums font-medium ${
                         p.net > 0
-                          ? "text-emerald-700"
+                          ? "text-[#134229]"
                           : p.net < 0
                             ? "text-amber-700"
                             : "text-gray-500"

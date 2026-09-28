@@ -48,7 +48,7 @@ export default async function ItemsPage({
         </div>
         <Link
           href="/items/new"
-          className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+          className="rounded-md border border-black bg-black px-3 py-2 text-sm font-medium text-white hover:bg-white hover:text-black"
         >
           New item
         </Link>
@@ -61,7 +61,7 @@ export default async function ItemsPage({
             href={`/items?status=${tab.key}`}
             className={`rounded-md px-3 py-1.5 text-sm font-medium ${
               status === tab.key
-                ? "bg-emerald-100 text-emerald-900"
+                ? "bg-[#e5f3e5] text-[#0e3020]"
                 : "text-gray-600 hover:bg-gray-100"
             }`}
           >
@@ -121,7 +121,7 @@ export default async function ItemsPage({
                     <span className="flex items-center justify-end gap-2">
                       <Link
                         href={`/items/${item.id}/edit`}
-                        className="text-xs text-emerald-700 hover:underline"
+                        className="text-xs text-[#134229] hover:underline"
                       >
                         edit
                       </Link>
@@ -146,7 +146,7 @@ export default async function ItemsPage({
                           <input type="hidden" name="isActive" value="true" />
                           <button
                             type="submit"
-                            className="text-xs text-emerald-700 hover:underline"
+                            className="text-xs text-[#134229] hover:underline"
                           >
                             reactivate
                           </button>
@@ -165,7 +165,7 @@ export default async function ItemsPage({
                     : status === "inactive"
                       ? "No retired items."
                       : "No items yet."}{" "}
-                  <Link href="/items/new" className="text-emerald-700 underline">
+                  <Link href="/items/new" className="text-[#134229] underline">
                     Add one
                   </Link>
                   .

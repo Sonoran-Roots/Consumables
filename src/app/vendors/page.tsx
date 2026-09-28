@@ -18,7 +18,7 @@ export default async function VendorsPage() {
         </div>
         <Link
           href="/vendors/new"
-          className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+          className="rounded-md border border-black bg-black px-3 py-2 text-sm font-medium text-white hover:bg-white hover:text-black"
         >
           New vendor
         </Link>
@@ -47,7 +47,7 @@ export default async function VendorsPage() {
                 <td className="px-4 py-2 text-right">
                   <Link
                     href={`/vendors/${v.id}/edit`}
-                    className="text-xs text-emerald-700 hover:underline"
+                    className="text-xs text-[#134229] hover:underline"
                   >
                     edit
                   </Link>
@@ -58,7 +58,7 @@ export default async function VendorsPage() {
               <tr>
                 <td colSpan={3} className="px-4 py-6 text-center text-gray-400">
                   No vendors yet.{" "}
-                  <Link href="/vendors/new" className="text-emerald-700 underline">
+                  <Link href="/vendors/new" className="text-[#134229] underline">
                     Add the first one
                   </Link>
                   .

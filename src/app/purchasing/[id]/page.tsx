@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
 const STATUS_STYLES: Record<string, string> = {
   OPEN: "bg-amber-100 text-amber-800",
   PARTIALLY_RECEIVED: "bg-blue-100 text-blue-800",
-  FULLY_RECEIVED: "bg-emerald-100 text-emerald-800",
+  FULLY_RECEIVED: "bg-[#e5f3e5] text-[#134229]",
   CLOSED: "bg-gray-100 text-gray-500",
 };
 
@@ -86,7 +86,7 @@ export default async function PurchaseOrderDetailPage({
           </span>
           <Link
             href={`/purchasing/${po.id}/edit`}
-            className="text-xs text-emerald-700 hover:underline"
+            className="text-xs text-[#134229] hover:underline"
           >
             edit
           </Link>
@@ -113,7 +113,7 @@ export default async function PurchaseOrderDetailPage({
           <div className="text-lg font-semibold text-gray-900">
             ${totalPaid.toFixed(2)}
             {po.paidInFull && (
-              <span className="ml-1 text-xs font-normal text-emerald-700">
+              <span className="ml-1 text-xs font-normal text-[#134229]">
                 (paid in full)
               </span>
             )}
@@ -242,7 +242,7 @@ export default async function PurchaseOrderDetailPage({
 
             <button
               type="submit"
-              className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
+              className="rounded-md border border-black bg-black px-3 py-1.5 text-sm font-medium text-white hover:bg-white hover:text-black"
             >
               Record delivery
             </button>
@@ -310,7 +310,7 @@ export default async function PurchaseOrderDetailPage({
             />
             <button
               type="submit"
-              className="shrink-0 rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
+              className="shrink-0 rounded-md border border-black bg-black px-3 py-1.5 text-sm font-medium text-white hover:bg-white hover:text-black"
             >
               Log
             </button>
@@ -338,7 +338,7 @@ export default async function PurchaseOrderDetailPage({
                 />
                 <button
                   type="submit"
-                  className="text-xs text-emerald-700 hover:underline"
+                  className="text-xs text-[#134229] hover:underline"
                 >
                   save
                 </button>
@@ -394,7 +394,7 @@ export default async function PurchaseOrderDetailPage({
           </label>
           <button
             type="submit"
-            className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
+            className="rounded-md border border-black bg-black px-3 py-1.5 text-sm font-medium text-white hover:bg-white hover:text-black"
           >
             Log credit
           </button>
@@ -439,7 +439,7 @@ export default async function PurchaseOrderDetailPage({
                 </label>
                 <button
                   type="submit"
-                  className="text-xs text-emerald-700 hover:underline"
+                  className="text-xs text-[#134229] hover:underline"
                 >
                   save
                 </button>

@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 const STATUS_STYLES: Record<string, string> = {
   OPEN: "bg-amber-100 text-amber-800",
   PARTIALLY_RECEIVED: "bg-blue-100 text-blue-800",
-  FULLY_RECEIVED: "bg-emerald-100 text-emerald-800",
+  FULLY_RECEIVED: "bg-[#e5f3e5] text-[#134229]",
   CLOSED: "bg-gray-100 text-gray-500",
 };
 
@@ -35,7 +35,7 @@ export default async function PurchasingPage() {
           </Link>
           <Link
             href="/purchasing/new"
-            className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+            className="rounded-md border border-black bg-black px-3 py-2 text-sm font-medium text-white hover:bg-white hover:text-black"
           >
             New PO
           </Link>
@@ -66,7 +66,7 @@ export default async function PurchasingPage() {
                 <td className="px-4 py-2 font-mono text-xs">
                   <Link
                     href={`/purchasing/${po.id}`}
-                    className="text-emerald-700 hover:underline"
+                    className="text-[#134229] hover:underline"
                   >
                     {po.poNumber}
                   </Link>
@@ -95,7 +95,7 @@ export default async function PurchasingPage() {
                 <td className="px-4 py-2 text-right">
                   <Link
                     href={`/purchasing/${po.id}`}
-                    className="text-emerald-700 hover:underline"
+                    className="text-[#134229] hover:underline"
                   >
                     View
                   </Link>
@@ -106,7 +106,7 @@ export default async function PurchasingPage() {
               <tr>
                 <td colSpan={8} className="px-4 py-6 text-center text-gray-400">
                   No purchase orders yet.{" "}
-                  <Link href="/purchasing/new" className="text-emerald-700 underline">
+                  <Link href="/purchasing/new" className="text-[#134229] underline">
                     Create one
                   </Link>
                   .

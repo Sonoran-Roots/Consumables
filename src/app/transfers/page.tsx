@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 const STATUS_STYLES: Record<string, string> = {
   REQUESTED: "bg-amber-100 text-amber-800",
   IN_TRANSIT: "bg-blue-100 text-blue-800",
-  RECEIVED: "bg-emerald-100 text-emerald-800",
+  RECEIVED: "bg-[#e5f3e5] text-[#134229]",
   CANCELLED: "bg-gray-100 text-gray-500",
 };
 
@@ -27,7 +27,7 @@ export default async function TransfersPage() {
         </div>
         <Link
           href="/transfers/new"
-          className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+          className="rounded-md border border-black bg-black px-3 py-2 text-sm font-medium text-white hover:bg-white hover:text-black"
         >
           New transfer
         </Link>
@@ -53,7 +53,7 @@ export default async function TransfersPage() {
                 <td className="px-4 py-2 text-gray-900">
                   <Link
                     href={`/transfers/${t.id}`}
-                    className="text-emerald-700 hover:underline"
+                    className="text-[#134229] hover:underline"
                   >
                     {t.fromSite.name}
                   </Link>
@@ -73,7 +73,7 @@ export default async function TransfersPage() {
                 <td className="px-4 py-2 text-right">
                   <Link
                     href={`/transfers/${t.id}`}
-                    className="text-emerald-700 hover:underline"
+                    className="text-[#134229] hover:underline"
                   >
                     View
                   </Link>
@@ -84,7 +84,7 @@ export default async function TransfersPage() {
               <tr>
                 <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
                   No transfers yet.{" "}
-                  <Link href="/transfers/new" className="text-emerald-700 underline">
+                  <Link href="/transfers/new" className="text-[#134229] underline">
                     Create one
                   </Link>
                   .

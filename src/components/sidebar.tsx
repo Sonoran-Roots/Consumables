@@ -138,11 +138,11 @@ export default function Sidebar() {
         collapsed ? "w-16" : "w-64"
       }`}
     >
-      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-gray-200 px-3">
+      <div className="flex h-14 shrink-0 items-center gap-2 bg-black px-3">
         <button
           type="button"
           onClick={() => setCollapsed((c) => !c)}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-white/70 hover:bg-white/10 hover:text-white"
           title={collapsed ? "Expand menu" : "Collapse menu"}
         >
           {collapsed ? (
@@ -152,8 +152,13 @@ export default function Sidebar() {
           )}
         </button>
         {!collapsed && (
-          <span className="truncate text-sm font-semibold text-gray-900">
-            Sonoranroots Inventory
+          <span className="truncate leading-tight">
+            <span className="block text-base font-black tracking-tight text-white">
+              JARS
+            </span>
+            <span className="block text-[10px] font-semibold tracking-[0.2em] text-white/60">
+              INVENTORY
+            </span>
           </span>
         )}
       </div>
@@ -172,7 +177,7 @@ export default function Sidebar() {
                 title={collapsed ? group.label : undefined}
                 className={`mx-2 my-0.5 flex items-center gap-3 rounded-md px-2.5 py-2 text-sm font-medium ${
                   active
-                    ? "bg-emerald-100 text-emerald-900"
+                    ? "bg-[#e5f3e5] text-[#0e3020]"
                     : "text-gray-600 hover:bg-gray-100"
                 }`}
               >
@@ -192,7 +197,7 @@ export default function Sidebar() {
                 }
                 className={`mx-2 my-0.5 flex w-[calc(100%-1rem)] items-center gap-3 rounded-md px-2.5 py-2 text-sm font-medium ${
                   active && (collapsed || !isOpen)
-                    ? "bg-emerald-50 text-emerald-900"
+                    ? "bg-[#eef6f0] text-[#0e3020]"
                     : "text-gray-600 hover:bg-gray-100"
                 }`}
               >
@@ -219,7 +224,7 @@ export default function Sidebar() {
                         href={leaf.href}
                         className={`my-0.5 block rounded-md px-2.5 py-1.5 text-sm ${
                           leafActive
-                            ? "bg-emerald-100 font-medium text-emerald-900"
+                            ? "bg-[#e5f3e5] font-medium text-[#0e3020]"
                             : "text-gray-600 hover:bg-gray-100"
                         }`}
                       >

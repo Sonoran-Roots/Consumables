@@ -30,7 +30,7 @@ export default function ImportPage() {
         <a
           href="/import-template.csv"
           download
-          className="mt-3 inline-block text-sm text-emerald-700 hover:underline"
+          className="mt-3 inline-block text-sm text-[#134229] hover:underline"
         >
           Download a template CSV
         </a>
@@ -42,7 +42,7 @@ export default function ImportPage() {
 
       <p className="mt-4 text-sm text-gray-500">
         Once imported, check the numbers on the{" "}
-        <Link href="/inventory" className="text-emerald-700 underline">
+        <Link href="/inventory" className="text-[#134229] underline">
           Inventory
         </Link>{" "}
         page.

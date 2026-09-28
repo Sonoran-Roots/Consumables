@@ -42,7 +42,7 @@ export default async function ReconciliationListPage() {
           </Link>
           <Link
             href="/reconciliation/new"
-            className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+            className="rounded-md border border-black bg-black px-3 py-2 text-sm font-medium text-white hover:bg-white hover:text-black"
           >
             New reconciliation
           </Link>
@@ -76,7 +76,7 @@ export default async function ReconciliationListPage() {
                   <span
                     className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                       r.status === "CLOSED"
-                        ? "bg-emerald-100 text-emerald-800"
+                        ? "bg-[#e5f3e5] text-[#134229]"
                         : r.status === "CANCELLED"
                           ? "bg-gray-100 text-gray-500"
                           : "bg-amber-100 text-amber-800"
@@ -88,7 +88,7 @@ export default async function ReconciliationListPage() {
                 <td className="px-4 py-2 text-right">
                   <Link
                     href={`/reconciliation/${r.id}`}
-                    className="text-xs text-emerald-700 hover:underline"
+                    className="text-xs text-[#134229] hover:underline"
                   >
                     view
                   </Link>
@@ -99,7 +99,7 @@ export default async function ReconciliationListPage() {
               <tr>
                 <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
                   No reconciliations yet.{" "}
-                  <Link href="/reconciliation/new" className="text-emerald-700 underline">
+                  <Link href="/reconciliation/new" className="text-[#134229] underline">
                     Start one
                   </Link>
                   .

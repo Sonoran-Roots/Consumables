@@ -121,7 +121,7 @@ export default function PurchaseOrderForm({
                 { itemId: "", quantityOrdered: "", unitCost: "" },
               ])
             }
-            className="text-sm text-emerald-700 hover:underline"
+            className="text-sm text-[#134229] hover:underline"
           >
             + Add line
           </button>
@@ -210,7 +210,7 @@ export default function PurchaseOrderForm({
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+        className="rounded-md border border-black bg-black px-4 py-2 text-sm font-medium text-white hover:bg-white hover:text-black disabled:opacity-50"
       >
         {pending ? "Creating…" : "Create PO"}
       </button>

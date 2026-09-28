@@ -160,7 +160,7 @@ export default async function ItemInventoryDetailPage({
           <h1 className="text-xl font-semibold text-gray-900">{item.name}</h1>
           <Link
             href={`/items/${item.id}/edit`}
-            className="text-xs text-emerald-700 hover:underline"
+            className="text-xs text-[#134229] hover:underline"
           >
             edit item
           </Link>
@@ -227,14 +227,14 @@ export default async function ItemInventoryDetailPage({
               {onHandRows.map((row) => (
                 <tr
                   key={row.site!.id}
-                  className={row.site!.id === siteId ? "bg-emerald-50" : undefined}
+                  className={row.site!.id === siteId ? "bg-[#eef6f0]" : undefined}
                 >
                   <td className="py-1.5 pr-3">
                     <Link
                       href={`/inventory/${item.id}?site=${row.site!.id}`}
                       className={`hover:underline ${
                         row.site!.id === siteId
-                          ? "font-medium text-emerald-800"
+                          ? "font-medium text-[#134229]"
                           : "text-gray-900"
                       }`}
                     >
@@ -298,7 +298,7 @@ export default async function ItemInventoryDetailPage({
                       </td>
                       <td
                         className={`py-1.5 pr-3 text-right tabular-nums font-medium ${
-                          t.quantity > 0 ? "text-emerald-700" : "text-red-700"
+                          t.quantity > 0 ? "text-[#134229]" : "text-red-700"
                         }`}
                       >
                         {t.quantity > 0 ? `+${t.quantity}` : t.quantity}
@@ -311,7 +311,7 @@ export default async function ItemInventoryDetailPage({
                         {link && (
                           <Link
                             href={link.href}
-                            className="text-xs text-emerald-700 hover:underline"
+                            className="text-xs text-[#134229] hover:underline"
                           >
                             {link.label}
                           </Link>
@@ -372,7 +372,7 @@ export default async function ItemInventoryDetailPage({
                 <div
                   key={i}
                   title={`Week of ${w.label}: ${w.total}`}
-                  className="flex-1 rounded-t bg-emerald-200"
+                  className="flex-1 rounded-t bg-[#d4edd6]"
                   style={{ height: `${Math.max((w.total / maxWeekly) * 100, w.total > 0 ? 4 : 1)}%` }}
                 />
               ))}

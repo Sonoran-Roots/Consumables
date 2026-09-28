@@ -27,7 +27,7 @@ export default function AuditHeaderForm({
       <button
         type="button"
         onClick={() => setEditing(true)}
-        className="text-xs text-emerald-700 hover:underline"
+        className="text-xs text-[#134229] hover:underline"
       >
         edit site/date/performed by
       </button>
@@ -92,7 +92,7 @@ export default function AuditHeaderForm({
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+        className="rounded-md border border-black bg-black px-3 py-1.5 text-sm font-medium text-white hover:bg-white hover:text-black disabled:opacity-50"
       >
         {pending ? "Saving…" : "Save"}
       </button>

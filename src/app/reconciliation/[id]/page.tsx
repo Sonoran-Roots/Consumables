@@ -76,7 +76,7 @@ export default async function ReconciliationDetailPage({
           <span
             className={`rounded-full px-2 py-0.5 text-xs font-medium ${
               reconciliation.status === "CLOSED"
-                ? "bg-emerald-100 text-emerald-800"
+                ? "bg-[#e5f3e5] text-[#134229]"
                 : reconciliation.status === "CANCELLED"
                   ? "bg-gray-100 text-gray-500"
                   : "bg-amber-100 text-amber-800"
@@ -86,7 +86,7 @@ export default async function ReconciliationDetailPage({
           </span>
           <Link
             href={`/reconciliation/${reconciliation.id}/edit`}
-            className="text-xs text-emerald-700 hover:underline"
+            className="text-xs text-[#134229] hover:underline"
           >
             edit
           </Link>
@@ -98,7 +98,7 @@ export default async function ReconciliationDetailPage({
           <p className="mt-1 text-sm text-gray-500">{reconciliation.notes}</p>
         )}
         {reconciliation.status === "CLOSED" && reconciliation.closedAt && (
-          <p className="mt-1 text-sm text-emerald-700">
+          <p className="mt-1 text-sm text-[#134229]">
             Closed {fmtDateTime(reconciliation.closedAt)}
             {reconciliation.closedBy ? ` by ${reconciliation.closedBy.name}` : ""}.
             Figures are frozen as of that moment.
@@ -143,7 +143,7 @@ export default async function ReconciliationDetailPage({
           <div className="mt-3 flex items-center gap-3 text-sm">
             <Link
               href={`/audits/${reconciliation.audit.id}`}
-              className="text-emerald-700 hover:underline"
+              className="text-[#134229] hover:underline"
             >
               {reconciliation.audit.auditDate.toLocaleDateString(undefined, {
                 timeZone: "UTC",
@@ -152,7 +152,7 @@ export default async function ReconciliationDetailPage({
             <span
               className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                 reconciliation.audit.status === "FINALIZED"
-                  ? "bg-emerald-100 text-emerald-800"
+                  ? "bg-[#e5f3e5] text-[#134229]"
                   : "bg-amber-100 text-amber-800"
               }`}
             >
@@ -167,7 +167,7 @@ export default async function ReconciliationDetailPage({
               <input type="hidden" name="reconciliationId" value={reconciliation.id} />
               <button
                 type="submit"
-                className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
+                className="rounded-md border border-black bg-black px-3 py-1.5 text-sm font-medium text-white hover:bg-white hover:text-black"
               >
                 Start a new audit for this site
               </button>

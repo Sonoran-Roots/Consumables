@@ -1,6 +1,20 @@
 @import "tailwindcss";
 
+/* JARS Cannabis Design System — see scripts/jars-rebrand.mjs for the
+ * page-level color remap; this file carries the font and token wiring. */
 @theme inline {
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-jars-sans);
+  --font-display: var(--font-jars-sans);
+  --font-mono: var(--font-jars-mono);
+
+  --color-jars-black: #000000;
+  --color-jars-ink: #121212;
+  --color-jars-green-50: #eef6f0;
+  --color-jars-green-100: #e5f3e5;
+  --color-jars-green-150: #eaf4ec;
+  --color-jars-green-200: #d4edd6;
+  --color-jars-green-300: #cee7d1;
+  --color-jars-green-700: #065f46;
+  --color-jars-green-800: #134229;
+  --color-jars-green-900: #0e3020;
 }

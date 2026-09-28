@@ -114,7 +114,7 @@ export default function KioskCheckout({
               key={s.id}
               type="button"
               onClick={() => chooseSite(s.id)}
-              className="rounded-xl border border-gray-200 bg-white px-6 py-5 text-lg font-medium text-gray-900 shadow-sm active:bg-emerald-50"
+              className="rounded-xl border border-gray-200 bg-white px-6 py-5 text-lg font-medium text-gray-900 shadow-sm active:bg-[#eef6f0]"
             >
               {s.name}
             </button>
@@ -138,7 +138,7 @@ export default function KioskCheckout({
             type="button"
             onClick={() => setIsReturn(false)}
             className={`px-4 py-1.5 text-sm font-medium ${
-              !isReturn ? "bg-emerald-600 text-white" : "text-gray-600"
+              !isReturn ? "bg-black text-white" : "text-gray-600"
             }`}
           >
             Check out
@@ -166,7 +166,7 @@ export default function KioskCheckout({
                 onClick={() => setEmployeeId(e.id)}
                 className={`rounded-full px-4 py-2 text-sm font-medium ${
                   employeeId === e.id
-                    ? "bg-emerald-600 text-white"
+                    ? "bg-black text-white"
                     : "bg-white text-gray-700 ring-1 ring-gray-300"
                 }`}
               >
@@ -190,7 +190,7 @@ export default function KioskCheckout({
                   key={item.id}
                   type="button"
                   onClick={() => addItem(item)}
-                  className="block w-full border-b border-gray-100 px-4 py-3 text-left text-base last:border-0 active:bg-emerald-50"
+                  className="block w-full border-b border-gray-100 px-4 py-3 text-left text-base last:border-0 active:bg-[#eef6f0]"
                 >
                   {item.name}
                 </button>
@@ -243,7 +243,7 @@ export default function KioskCheckout({
           </p>
         )}
         {state?.success && (
-          <p className="mt-4 rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          <p className="mt-4 rounded-lg bg-[#eef6f0] px-4 py-3 text-sm text-[#134229]">
             Logged {state.itemCount} item{state.itemCount === 1 ? "" : "s"}.
           </p>
         )}
@@ -265,7 +265,7 @@ export default function KioskCheckout({
         <button
           type="submit"
           disabled={!canSubmit}
-          className="w-full rounded-xl bg-emerald-600 py-4 text-lg font-semibold text-white disabled:opacity-40"
+          className="w-full rounded-xl bg-black py-4 text-lg font-semibold text-white disabled:opacity-40"
         >
           {pending
             ? "Logging…"

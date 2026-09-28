@@ -33,7 +33,7 @@ export default async function SitesPage() {
           </Link>
           <Link
             href="/sites/new"
-            className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+            className="rounded-md border border-black bg-black px-3 py-2 text-sm font-medium text-white hover:bg-white hover:text-black"
           >
             New site
           </Link>
@@ -51,7 +51,7 @@ export default async function SitesPage() {
                 </span>
                 <Link
                   href={`/books/${book.id}/edit`}
-                  className="text-xs text-emerald-700 hover:underline"
+                  className="text-xs text-[#134229] hover:underline"
                 >
                   edit
                 </Link>
@@ -95,7 +95,7 @@ export default async function SitesPage() {
                     </span>
                     <Link
                       href={`/sites/${site.id}/edit`}
-                      className="text-xs text-emerald-700 hover:underline"
+                      className="text-xs text-[#134229] hover:underline"
                     >
                       edit
                     </Link>
@@ -125,7 +125,7 @@ export default async function SitesPage() {
         {books.length === 0 && (
           <p className="text-sm text-gray-400">
             No books yet.{" "}
-            <Link href="/books/new" className="text-emerald-700 underline">
+            <Link href="/books/new" className="text-[#134229] underline">
               Create one
             </Link>
             .

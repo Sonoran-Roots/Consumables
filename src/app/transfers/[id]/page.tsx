@@ -45,7 +45,7 @@ export default async function TransferDetailPage({
             </span>
             <Link
               href={`/transfers/${transfer.id}/edit`}
-              className="text-xs text-emerald-700 hover:underline"
+              className="text-xs text-[#134229] hover:underline"
             >
               edit
             </Link>
@@ -80,7 +80,7 @@ export default async function TransferDetailPage({
         )}
 
         {transfer.status === "RECEIVED" && (
-          <p className="mt-4 text-sm text-emerald-700">
+          <p className="mt-4 text-sm text-[#134229]">
             Received {transfer.receivedAt?.toLocaleString()}
             {transfer.receivedBy ? ` by ${transfer.receivedBy.name}` : ""}. Inventory
             transactions posted for both sites.
@@ -108,7 +108,7 @@ export default async function TransferDetailPage({
               </select>
               <button
                 type="submit"
-                className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
+                className="rounded-md border border-black bg-black px-3 py-1.5 text-sm font-medium text-white hover:bg-white hover:text-black"
               >
                 Mark received
               </button>
