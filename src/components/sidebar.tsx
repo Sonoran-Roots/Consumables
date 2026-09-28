@@ -2,7 +2,8 @@
 
 import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useSession, signOut } from "@/lib/auth-client";
 import {
   MenuIcon,
   ChevronLeftIcon,
@@ -107,6 +108,8 @@ function getCollapsedServerSnapshot() {
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { data: session } = useSession();
   const collapsed = useSyncExternalStore(
     subscribeCollapsed,
     getCollapsedSnapshot,
@@ -238,6 +241,39 @@ export default function Sidebar() {
           );
         })}
       </div>
+
+      {session?.user && (
+        <div className="shrink-0 border-t border-gray-200 p-2">
+          <div className="flex items-center gap-2 rounded-md px-2 py-1.5">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#e5f3e5] text-xs font-semibold text-[#0e3020]">
+              {session.user.name?.[0]?.toUpperCase() ?? session.user.email[0].toUpperCase()}
+            </div>
+            {!collapsed && (
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-gray-900">
+                  {session.user.name || session.user.email}
+                </p>
+                <button
+                  type="button"
+                  onClick={() =>
+                    signOut({
+                      fetchOptions: {
+                        onSuccess: () => {
+                          router.push("/sign-in");
+                          router.refresh();
+                        },
+                      },
+                    })
+                  }
+                  className="text-xs text-gray-500 hover:text-gray-800 hover:underline"
+                >
+                  Sign out
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </nav>
   );
 }

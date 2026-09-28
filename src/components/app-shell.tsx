@@ -6,8 +6,9 @@ import Sidebar from "./sidebar";
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isKiosk = pathname?.startsWith("/kiosk");
+  const isAuthPage = pathname?.startsWith("/sign-in") || pathname?.startsWith("/sign-up");
 
-  if (isKiosk) {
+  if (isKiosk || isAuthPage) {
     return <main className="min-h-full w-full">{children}</main>;
   }
 

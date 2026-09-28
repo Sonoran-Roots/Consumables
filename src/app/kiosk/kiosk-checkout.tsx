@@ -2,6 +2,13 @@
 
 import { useState, useMemo, useEffect, useActionState } from "react";
 import { logKioskCheckout } from "../checkouts/actions";
+import {
+  ChevronDownIcon,
+  SearchIcon,
+  UserIcon,
+  CheckCircleIcon,
+  XIcon,
+} from "@/components/icons";
 
 type Site = { id: string; name: string };
 type Employee = { id: string; name: string };
@@ -101,24 +108,36 @@ export default function KioskCheckout({
   }
 
   if (!siteLoaded) {
-    return <div className="flex h-screen items-center justify-center text-gray-400">Loading…</div>;
+    return (
+      <div className="flex h-screen items-center justify-center bg-white text-gray-400">
+        Loading…
+      </div>
+    );
   }
 
   if (!siteId) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-gray-50 p-6">
-        <h1 className="text-2xl font-semibold text-gray-900">Which site is this?</h1>
-        <div className="grid w-full max-w-md grid-cols-1 gap-3 sm:grid-cols-2">
-          {sites.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => chooseSite(s.id)}
-              className="rounded-xl border border-gray-200 bg-white px-6 py-5 text-lg font-medium text-gray-900 shadow-sm active:bg-[#eef6f0]"
-            >
-              {s.name}
-            </button>
-          ))}
+      <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-white p-6">
+        <div className="text-center">
+          <div className="text-3xl font-black tracking-tight text-black">JARS</div>
+          <div className="text-xs font-semibold tracking-[0.2em] text-gray-500">INVENTORY</div>
+        </div>
+        <div className="w-full max-w-md">
+          <h1 className="mb-4 text-center text-xl font-semibold text-gray-900">
+            Which site is this?
+          </h1>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {sites.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => chooseSite(s.id)}
+                className="rounded-2xl border border-gray-200 bg-white px-6 py-5 text-lg font-medium text-gray-900 shadow-sm transition-colors active:bg-[#eef6f0]"
+              >
+                {s.name}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -126,19 +145,27 @@ export default function KioskCheckout({
 
   const site = sites.find((s) => s.id === siteId);
   const canSubmit = !!employeeId && cart.length > 0 && !pending;
+  const totalUnits = cart.reduce((sum, l) => sum + l.quantity, 0);
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
-      <div className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3">
-        <button type="button" onClick={changeSite} className="text-sm text-gray-500">
-          {site?.name} <span className="underline">change</span>
-        </button>
-        <div className="flex overflow-hidden rounded-full border border-gray-300">
+      <div className="flex shrink-0 items-center justify-between bg-black px-4 py-3">
+        <div className="flex items-center gap-2">
+          <span className="text-base font-black tracking-tight text-white">JARS</span>
+          <button
+            type="button"
+            onClick={changeSite}
+            className="rounded-full bg-white/10 px-2.5 py-1 text-xs font-medium text-white/80 hover:bg-white/20 hover:text-white"
+          >
+            {site?.name} · change
+          </button>
+        </div>
+        <div className="flex overflow-hidden rounded-full bg-white/10 p-0.5">
           <button
             type="button"
             onClick={() => setIsReturn(false)}
-            className={`px-4 py-1.5 text-sm font-medium ${
-              !isReturn ? "bg-black text-white" : "text-gray-600"
+            className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+              !isReturn ? "bg-white text-black" : "text-white/70"
             }`}
           >
             Check out
@@ -146,8 +173,8 @@ export default function KioskCheckout({
           <button
             type="button"
             onClick={() => setIsReturn(true)}
-            className={`px-4 py-1.5 text-sm font-medium ${
-              isReturn ? "bg-blue-600 text-white" : "text-gray-600"
+            className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+              isReturn ? "bg-white text-black" : "text-white/70"
             }`}
           >
             Return
@@ -155,33 +182,42 @@ export default function KioskCheckout({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 pb-44">
-        <div className="mb-4">
-          <p className="mb-2 text-sm font-medium text-gray-700">Who&apos;s this?</p>
-          <div className="flex flex-wrap gap-2">
-            {employees.map((e) => (
-              <button
-                key={e.id}
-                type="button"
-                onClick={() => setEmployeeId(e.id)}
-                className={`rounded-full px-4 py-2 text-sm font-medium ${
-                  employeeId === e.id
-                    ? "bg-black text-white"
-                    : "bg-white text-gray-700 ring-1 ring-gray-300"
-                }`}
-              >
-                {e.name}
-              </button>
-            ))}
+      <div className="flex-1 overflow-y-auto p-4 pb-48">
+        <div className="mb-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+          <label
+            htmlFor="kiosk-employee"
+            className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-gray-700"
+          >
+            <UserIcon className="h-4 w-4 text-gray-400" />
+            Who&apos;s this?
+          </label>
+          <div className="relative">
+            <select
+              id="kiosk-employee"
+              value={employeeId ?? ""}
+              onChange={(e) => setEmployeeId(e.target.value || null)}
+              className="w-full appearance-none rounded-xl border border-gray-300 bg-white py-3 pl-4 pr-10 text-lg text-gray-900"
+            >
+              <option value="" disabled>
+                Select your name…
+              </option>
+              {employees.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.name}
+                </option>
+              ))}
+            </select>
+            <ChevronDownIcon className="pointer-events-none absolute right-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
           </div>
         </div>
 
         <div className="relative mb-4">
+          <SearchIcon className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search item…"
-            className="w-full rounded-xl border border-gray-300 px-4 py-3 text-lg"
+            className="w-full rounded-xl border border-gray-300 bg-white py-3 pl-11 pr-4 text-lg shadow-sm"
           />
           {results.length > 0 && (
             <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg">
@@ -190,9 +226,14 @@ export default function KioskCheckout({
                   key={item.id}
                   type="button"
                   onClick={() => addItem(item)}
-                  className="block w-full border-b border-gray-100 px-4 py-3 text-left text-base last:border-0 active:bg-[#eef6f0]"
+                  className="flex w-full items-center justify-between border-b border-gray-100 px-4 py-3 text-left last:border-0 active:bg-[#eef6f0]"
                 >
-                  {item.name}
+                  <span className="text-base text-gray-900">{item.name}</span>
+                  {item.sku && (
+                    <span className="ml-3 shrink-0 font-mono text-xs text-gray-400">
+                      {item.sku}
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
@@ -201,18 +242,27 @@ export default function KioskCheckout({
 
         <div className="space-y-2">
           {cart.length === 0 && (
-            <p className="py-8 text-center text-gray-400">Search above to add items.</p>
+            <div className="flex flex-col items-center gap-2 py-10 text-gray-400">
+              <SearchIcon className="h-8 w-8" />
+              <p>Search above to add items.</p>
+            </div>
+          )}
+          {cart.length > 0 && (
+            <p className="px-1 text-xs font-medium uppercase tracking-wide text-gray-400">
+              {cart.length} item{cart.length === 1 ? "" : "s"} · {totalUnits} unit
+              {totalUnits === 1 ? "" : "s"}
+            </p>
           )}
           {cart.map((line) => (
             <div
               key={line.itemId}
-              className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-3"
+              className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-3 shadow-sm"
             >
               <span className="flex-1 text-base text-gray-900">{line.name}</span>
               <button
                 type="button"
                 onClick={() => updateQty(line.itemId, -1)}
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-lg font-medium text-gray-700"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-lg font-medium text-gray-700 active:bg-gray-200"
               >
                 −
               </button>
@@ -222,16 +272,17 @@ export default function KioskCheckout({
               <button
                 type="button"
                 onClick={() => updateQty(line.itemId, 1)}
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-lg font-medium text-gray-700"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-lg font-medium text-gray-700 active:bg-gray-200"
               >
                 +
               </button>
               <button
                 type="button"
                 onClick={() => removeLine(line.itemId)}
-                className="ml-1 text-sm text-red-500"
+                className="ml-1 flex h-9 w-9 items-center justify-center rounded-full text-gray-400 active:bg-gray-100 active:text-red-600"
+                title="Remove"
               >
-                remove
+                <XIcon className="h-4 w-4" />
               </button>
             </div>
           ))}
@@ -243,7 +294,8 @@ export default function KioskCheckout({
           </p>
         )}
         {state?.success && (
-          <p className="mt-4 rounded-lg bg-[#eef6f0] px-4 py-3 text-sm text-[#134229]">
+          <p className="mt-4 flex items-center gap-2 rounded-lg bg-[#eef6f0] px-4 py-3 text-sm text-[#134229]">
+            <CheckCircleIcon className="h-4 w-4 shrink-0" />
             Logged {state.itemCount} item{state.itemCount === 1 ? "" : "s"}.
           </p>
         )}
@@ -262,10 +314,19 @@ export default function KioskCheckout({
             <input type="hidden" name="quantity" value={line.quantity} />
           </span>
         ))}
+        {!canSubmit && (cart.length === 0 || !employeeId) && (
+          <p className="mb-2 text-center text-xs text-gray-400">
+            {!employeeId && cart.length === 0
+              ? "Pick who this is for and add at least one item."
+              : !employeeId
+                ? "Pick who this is for."
+                : "Add at least one item."}
+          </p>
+        )}
         <button
           type="submit"
           disabled={!canSubmit}
-          className="w-full rounded-xl bg-black py-4 text-lg font-semibold text-white disabled:opacity-40"
+          className="w-full rounded-xl border border-black bg-black py-4 text-lg font-semibold text-white transition-colors hover:bg-white hover:text-black disabled:border-gray-300 disabled:bg-gray-200 disabled:text-gray-400"
         >
           {pending
             ? "Logging…"
