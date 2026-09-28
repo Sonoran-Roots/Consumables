@@ -67,7 +67,6 @@ const GROUPS: Group[] = [
       { href: "/employees", label: "Employees" },
       { href: "/categories", label: "Categories" },
       { href: "/units", label: "Units of measure" },
-      { href: "/users", label: "App users" },
     ],
   },
 ];

@@ -93,9 +93,9 @@ export default function EmployeeEditForm({
           <option value="ADMIN">Admin — same as Manager, for kiosk purposes</option>
         </select>
         <p className="mt-1 text-xs text-gray-500">
-          Unrelated to desktop app access — that&apos;s managed separately at{" "}
-          <a href="/users" className="underline">
-            App users
+          Unrelated to desktop app access — that&apos;s managed from the{" "}
+          <a href="/employees" className="underline">
+            Employees list
           </a>
           .
         </p>

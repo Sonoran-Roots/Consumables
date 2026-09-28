@@ -27,7 +27,6 @@ const ROUTE_MIN_ROLE: { prefix: string; role: StaffRole }[] = [
   { prefix: "/categories", role: "MANAGER" },
   { prefix: "/units/", role: "ADMIN" },
   { prefix: "/units", role: "MANAGER" },
-  { prefix: "/users", role: "ADMIN" },
 ];
 
 export function minRoleFor(pathname: string): StaffRole {

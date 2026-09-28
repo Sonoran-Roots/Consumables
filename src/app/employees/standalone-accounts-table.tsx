@@ -95,7 +95,7 @@ function Row({ user }: { user: UserRow }) {
   );
 }
 
-export default function UsersTable({ users }: { users: UserRow[] }) {
+export default function StandaloneAccountsTable({ users }: { users: UserRow[] }) {
   return (
     <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
       <table className="min-w-full divide-y divide-gray-200 text-sm">
@@ -111,13 +111,6 @@ export default function UsersTable({ users }: { users: UserRow[] }) {
           {users.map((u) => (
             <Row key={u.id} user={u} />
           ))}
-          {users.length === 0 && (
-            <tr>
-              <td colSpan={4} className="px-4 py-6 text-center text-gray-400">
-                No accounts yet.
-              </td>
-            </tr>
-          )}
         </tbody>
       </table>
     </div>

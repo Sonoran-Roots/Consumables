@@ -1,13 +1,33 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { db } from "@/lib/db";
+import { auth } from "@/lib/auth";
+import { roleAtLeast } from "@/lib/access";
+import EmployeeAccessCell from "./employee-access-cell";
+import StandaloneAccountsTable from "./standalone-accounts-table";
 
 export const dynamic = "force-dynamic";
 
 export default async function EmployeesPage() {
-  const employees = await db.employee.findMany({
-    orderBy: { name: "asc" },
-    include: { site: true },
-  });
+  const [session, employees, standaloneUsers] = await Promise.all([
+    auth.api.getSession({ headers: await headers() }),
+    db.employee.findMany({
+      orderBy: { name: "asc" },
+      include: {
+        site: true,
+        user: { select: { id: true, email: true, role: true, isPurchasingTeam: true } },
+      },
+    }),
+    // Accounts with no linked employee — the shared, location-signed-in
+    // kiosk logins fall here, not among "people."
+    db.user.findMany({
+      where: { employee: null },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, email: true, role: true, isPurchasingTeam: true },
+    }),
+  ]);
+
+  const isAdmin = roleAtLeast(session?.user.role as string | undefined, "ADMIN");
 
   return (
     <div>
@@ -15,8 +35,8 @@ export default async function EmployeesPage() {
         <div>
           <h1 className="text-xl font-semibold text-gray-900">Employees</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Real accountability for checkouts and transfers — no more 2-letter
-            initials.
+            Real accountability for checkouts and transfers, and — for the purchasing team —
+            who can reach the desktop app at all.
           </p>
         </div>
         <Link
@@ -32,12 +52,8 @@ export default async function EmployeesPage() {
           <thead className="bg-gray-50">
             <tr>
               <th className="px-4 py-2 text-left font-medium text-gray-500">Name</th>
-              <th className="px-4 py-2 text-left font-medium text-gray-500">
-                Initials
-              </th>
-              <th className="px-4 py-2 text-left font-medium text-gray-500">
-                Home site
-              </th>
+              <th className="px-4 py-2 text-left font-medium text-gray-500">Home site</th>
+              <th className="px-4 py-2 text-left font-medium text-gray-500">Desktop app access</th>
               <th className="px-4 py-2 text-left font-medium text-gray-500"></th>
             </tr>
           </thead>
@@ -54,8 +70,15 @@ export default async function EmployeesPage() {
                     </span>
                   )}
                 </td>
-                <td className="px-4 py-2 text-gray-600">{e.initials ?? "—"}</td>
                 <td className="px-4 py-2 text-gray-600">{e.site?.name ?? "—"}</td>
+                <td className="px-4 py-2">
+                  <EmployeeAccessCell
+                    employeeId={e.id}
+                    employeeName={e.name}
+                    user={e.user}
+                    isAdmin={isAdmin}
+                  />
+                </td>
                 <td className="px-4 py-2 text-right">
                   <Link
                     href={`/employees/${e.id}/edit`}
@@ -80,6 +103,18 @@ export default async function EmployeesPage() {
           </tbody>
         </table>
       </div>
+
+      {isAdmin && standaloneUsers.length > 0 && (
+        <div className="mt-8">
+          <h2 className="text-sm font-medium text-gray-700">Other accounts</h2>
+          <p className="mt-1 text-xs text-gray-500">
+            Logins with no linked employee — typically the shared accounts kiosk tablets sign into.
+          </p>
+          <div className="mt-2">
+            <StandaloneAccountsTable users={standaloneUsers} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
