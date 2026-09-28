@@ -32,24 +32,38 @@ export type LineComputation = {
   endingQty: number;
   unitCost: number | null;
   endingValue: number | null;
+  beginningValue: number | null;
   purchasedQty: number;
   purchasedValue: number;
+  producedQty: number;
+  producedValue: number;
   transferInQty: number;
   transferInValue: number;
   transferOutQty: number;
   transferOutValue: number;
+  soldQty: number;
+  soldValue: number;
+  soldAkQty: number;
+  soldAkValue: number;
+  usedQty: number;
+  usedValue: number;
   consumedQty: number;
   discrepancyQty: number;
+  discrepancyValue: number;
   usageRatePerDay: number;
 };
 
 type Bucket = {
   purchasedQty: number;
   purchasedValue: number;
+  producedQty: number;
   transferInQty: number;
   transferInValue: number;
   transferOutQty: number;
   transferOutValue: number;
+  soldQty: number;
+  soldAkQty: number;
+  usedQty: number;
   consumedQty: number;
   discrepancyQty: number;
 };
@@ -58,10 +72,14 @@ function emptyBucket(): Bucket {
   return {
     purchasedQty: 0,
     purchasedValue: 0,
+    producedQty: 0,
     transferInQty: 0,
     transferInValue: 0,
     transferOutQty: 0,
     transferOutValue: 0,
+    soldQty: 0,
+    soldAkQty: 0,
+    usedQty: 0,
     consumedQty: 0,
     discrepancyQty: 0,
   };
@@ -137,15 +155,26 @@ export async function computeReconciliationLines(
         b.transferOutQty += Math.abs(qty);
         b.transferOutValue += Math.abs(val);
         break;
-      case "DISCREPANCY":
-        b.discrepancyQty += qty;
-        b.consumedQty += consumptionDelta(row.type, qty);
+      case "PRODUCTION":
+        b.producedQty += qty;
         break;
       case "SALE":
+        b.soldQty += Math.abs(qty);
+        b.consumedQty += consumptionDelta(row.type, qty);
+        break;
       case "SALE_OUT_OF_STATE":
+        b.soldAkQty += Math.abs(qty);
+        b.consumedQty += consumptionDelta(row.type, qty);
+        break;
       case "DAMAGED":
       case "CHECKOUT":
       case "CHECKOUT_RETURN":
+        b.usedQty += consumptionDelta(row.type, qty);
+        b.consumedQty += consumptionDelta(row.type, qty);
+        break;
+      case "DISCREPANCY":
+        b.discrepancyQty += qty;
+        b.usedQty += consumptionDelta(row.type, qty);
         b.consumedQty += consumptionDelta(row.type, qty);
         break;
       default:
@@ -167,6 +196,7 @@ export async function computeReconciliationLines(
       beginningQty !== 0 ||
       endingQty !== 0 ||
       b.purchasedQty !== 0 ||
+      b.producedQty !== 0 ||
       b.transferInQty !== 0 ||
       b.transferOutQty !== 0 ||
       b.consumedQty !== 0 ||
@@ -199,6 +229,13 @@ export async function computeReconciliationLines(
     const endingQty = endingMap.get(itemId) ?? 0;
     const b = bucketMap.get(itemId) ?? emptyBucket();
     const unitCost = costMap.get(itemId) ?? null;
+    // Purchased/transfer values use each transaction's own recorded cost
+    // (accurate). Everything below has no per-transaction cost captured
+    // today (checkouts, sales, discrepancies, production don't record
+    // one), so it's estimated from the item's most recently known cost —
+    // same approach as endingValue, and same caveat: an estimate, not a
+    // recorded actual, until those flows start capturing cost themselves.
+    const valueOf = (qty: number) => (unitCost != null ? qty * unitCost : 0);
 
     return {
       itemId,
@@ -206,14 +243,24 @@ export async function computeReconciliationLines(
       endingQty,
       unitCost,
       endingValue: unitCost != null ? endingQty * unitCost : null,
+      beginningValue: unitCost != null ? beginningQty * unitCost : null,
       purchasedQty: b.purchasedQty,
       purchasedValue: b.purchasedValue,
+      producedQty: b.producedQty,
+      producedValue: valueOf(b.producedQty),
       transferInQty: b.transferInQty,
       transferInValue: b.transferInValue,
       transferOutQty: b.transferOutQty,
       transferOutValue: b.transferOutValue,
+      soldQty: b.soldQty,
+      soldValue: valueOf(b.soldQty),
+      soldAkQty: b.soldAkQty,
+      soldAkValue: valueOf(b.soldAkQty),
+      usedQty: b.usedQty,
+      usedValue: valueOf(b.usedQty),
       consumedQty: b.consumedQty,
       discrepancyQty: b.discrepancyQty,
+      discrepancyValue: valueOf(b.discrepancyQty),
       usageRatePerDay: b.consumedQty / periodDays,
     };
   });

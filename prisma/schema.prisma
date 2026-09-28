@@ -423,17 +423,27 @@ model ReconciliationLine {
   beginningQty Float // on-hand as of periodStart
   endingQty    Float // on-hand as of periodEnd
 
-  unitCost    Float? // most recent known cost for the item as of periodEnd, used to value endingQty
-  endingValue Float? // endingQty * unitCost
+  unitCost       Float? // most recent known cost for the item as of periodEnd, used to value endingQty and the fields below
+  endingValue    Float? // endingQty * unitCost
+  beginningValue Float? // beginningQty * unitCost
 
   purchasedQty     Float @default(0)
-  purchasedValue   Float @default(0)
+  purchasedValue   Float @default(0) // uses the transaction's own recorded cost, not unitCost
+  producedQty      Float @default(0)
+  producedValue    Float @default(0)
   transferInQty    Float @default(0)
-  transferInValue  Float @default(0)
+  transferInValue  Float @default(0) // uses the transaction's own recorded cost, not unitCost
   transferOutQty   Float @default(0)
-  transferOutValue Float @default(0)
-  consumedQty      Float @default(0) // usage: sales + net checkouts + damaged, magnitude
+  transferOutValue Float @default(0) // uses the transaction's own recorded cost, not unitCost
+  soldQty          Float @default(0)
+  soldValue        Float @default(0)
+  soldAkQty        Float @default(0)
+  soldAkValue      Float @default(0)
+  usedQty          Float @default(0) // checkouts (net of returns) + damaged + audit discrepancies, magnitude
+  usedValue        Float @default(0)
+  consumedQty      Float @default(0) // sold + soldAk + used combined, magnitude — the existing par-level/usage-report metric
   discrepancyQty   Float @default(0) // net audit variance posted during the period
+  discrepancyValue Float @default(0)
 
   usageRatePerDay Float? // consumedQty / period length in days — feeds future par-level analytics
 

@@ -35,6 +35,12 @@ export default async function ReconciliationListPage() {
             Usage report
           </Link>
           <Link
+            href="/reconciliation/finance-report"
+            className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50"
+          >
+            EOM finance report
+          </Link>
+          <Link
             href="/reconciliation/new"
             className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700"
           >
