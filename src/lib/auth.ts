@@ -16,5 +16,13 @@ export const auth = betterAuth({
     enabled: true,
     disableSignUp: false,
   },
+  // Better Auth only trusts baseURL's own origin (BETTER_AUTH_URL) by
+  // default — every other origin gets rejected as "Invalid origin",
+  // including Vercel's own per-deployment preview URLs (each deploy gets
+  // a unique *.vercel.app hostname distinct from the stable production
+  // alias). VERCEL_URL is set automatically by Vercel to whichever
+  // deployment is currently serving the request, so this trusts that one
+  // too without hardcoding anything.
+  trustedOrigins: process.env.VERCEL_URL ? [`https://${process.env.VERCEL_URL}`] : [],
   plugins: [nextCookies()],
 });
