@@ -27,10 +27,12 @@ function csvCell(value: string | number) {
 
 export default function FinanceReportTable({
   rows,
+  byMaterialType,
   periodStart,
   periodEnd,
 }: {
   rows: FinanceSiteRow[];
+  byMaterialType: boolean;
   periodStart: string;
   periodEnd: string;
 }) {
@@ -43,17 +45,27 @@ export default function FinanceReportTable({
   );
 
   function downloadCsv() {
-    const header = ["Site", ...COLUMNS.map((c) => c.label)];
+    const header = [
+      "Site",
+      ...(byMaterialType ? ["Material type"] : []),
+      ...COLUMNS.map((c) => c.label),
+    ];
     const lines = [header.map(csvCell).join(",")];
     for (const row of rows) {
       lines.push(
-        [row.siteName, ...COLUMNS.map((c) => (row[c.key] as number).toFixed(2))]
+        [
+          row.siteName,
+          ...(byMaterialType ? [row.materialType ?? ""] : []),
+          ...COLUMNS.map((c) => (row[c.key] as number).toFixed(2)),
+        ]
           .map(csvCell)
           .join(",")
       );
     }
     lines.push(
-      ["TOTAL", ...COLUMNS.map((c) => totals[c.key].toFixed(2))].map(csvCell).join(",")
+      ["TOTAL", ...(byMaterialType ? [""] : []), ...COLUMNS.map((c) => totals[c.key].toFixed(2))]
+        .map(csvCell)
+        .join(",")
     );
     const csv = lines.join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -71,7 +83,7 @@ export default function FinanceReportTable({
     <div className="mt-6">
       <div className="flex items-center justify-between">
         <p className="text-sm text-gray-500">
-          {rows.length} site{rows.length === 1 ? "" : "s"} with activity this period.
+          {rows.length} row{rows.length === 1 ? "" : "s"} with activity this period.
         </p>
         <button
           type="button"
@@ -90,6 +102,11 @@ export default function FinanceReportTable({
               <th className="sticky left-0 bg-gray-50 px-4 py-2 text-left font-medium text-gray-500">
                 Site
               </th>
+              {byMaterialType && (
+                <th className="px-3 py-2 text-left font-medium text-gray-500">
+                  Material type
+                </th>
+              )}
               {COLUMNS.map((c) => (
                 <th key={c.key} className="px-3 py-2 text-right font-medium text-gray-500">
                   {c.label}
@@ -98,11 +115,14 @@ export default function FinanceReportTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {rows.map((row) => (
-              <tr key={row.siteId}>
+            {rows.map((row, i) => (
+              <tr key={`${row.siteId}-${row.materialType ?? i}`}>
                 <td className="sticky left-0 bg-white px-4 py-1.5 font-medium text-gray-900">
                   {row.siteName}
                 </td>
+                {byMaterialType && (
+                  <td className="px-3 py-1.5 text-gray-600">{row.materialType}</td>
+                )}
                 {COLUMNS.map((c) => (
                   <td key={c.key} className="px-3 py-1.5 text-right tabular-nums text-gray-600">
                     {money(row[c.key] as number)}
@@ -112,7 +132,10 @@ export default function FinanceReportTable({
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={COLUMNS.length + 1} className="px-4 py-6 text-center text-gray-400">
+                <td
+                  colSpan={COLUMNS.length + (byMaterialType ? 2 : 1)}
+                  className="px-4 py-6 text-center text-gray-400"
+                >
                   No activity recorded at any site during this period.
                 </td>
               </tr>
@@ -120,6 +143,7 @@ export default function FinanceReportTable({
             {rows.length > 0 && (
               <tr className="bg-gray-50 font-medium">
                 <td className="sticky left-0 bg-gray-50 px-4 py-1.5 text-gray-900">TOTAL</td>
+                {byMaterialType && <td className="px-3 py-1.5" />}
                 {COLUMNS.map((c) => (
                   <td key={c.key} className="px-3 py-1.5 text-right tabular-nums text-gray-900">
                     {money(totals[c.key])}

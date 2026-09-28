@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import type { TransactionType } from "@prisma/client";
+import type { TransactionType, MaterialType } from "@prisma/client";
 
 // "Used or missing inventory" — sales, net checkouts (a return gives some
 // back), damage, and audit discrepancies, all as a signed contribution to
@@ -28,6 +28,7 @@ export function consumptionDelta(type: TransactionType, quantity: number): numbe
 
 export type LineComputation = {
   itemId: string;
+  materialType: MaterialType;
   beginningQty: number;
   endingQty: number;
   unitCost: number | null;
@@ -224,6 +225,12 @@ export async function computeReconciliationLines(
     }
   }
 
+  const itemRows = await db.item.findMany({
+    where: { id: { in: keptItemIds } },
+    select: { id: true, materialType: true },
+  });
+  const materialTypeMap = new Map(itemRows.map((i) => [i.id, i.materialType]));
+
   return keptItemIds.map((itemId) => {
     const beginningQty = beginningMap.get(itemId) ?? 0;
     const endingQty = endingMap.get(itemId) ?? 0;
@@ -239,6 +246,7 @@ export async function computeReconciliationLines(
 
     return {
       itemId,
+      materialType: materialTypeMap.get(itemId) ?? "NA",
       beginningQty,
       endingQty,
       unitCost,
@@ -264,4 +272,78 @@ export async function computeReconciliationLines(
       usageRatePerDay: b.consumedQty / periodDays,
     };
   });
+}
+
+export type InterBookTransfer = {
+  fromBookId: string;
+  fromBookName: string;
+  toBookId: string;
+  toBookName: string;
+  qty: number;
+  value: number;
+};
+
+// Every transfer between two sites in different books is, in effect, an
+// inter-company movement of value: the receiving book owes the sending book
+// for what it received (at the transfer's recorded cost). Grouped by
+// (from book, to book) rather than by site, since that's the level finance
+// actually settles at.
+export async function computeInterBookTransfers(
+  periodStart: Date,
+  periodEnd: Date
+): Promise<InterBookTransfer[]> {
+  const periodEndExclusive = new Date(periodEnd.getTime() + 24 * 60 * 60 * 1000);
+
+  const transferOutRows = await db.inventoryTransaction.findMany({
+    where: {
+      type: "TRANSFER_OUT",
+      transferId: { not: null },
+      occurredAt: { gte: periodStart, lt: periodEndExclusive },
+    },
+    select: {
+      quantity: true,
+      totalValue: true,
+      transferId: true,
+      site: { select: { bookId: true, book: { select: { name: true } } } },
+    },
+  });
+
+  if (transferOutRows.length === 0) return [];
+
+  const transferIds = [...new Set(transferOutRows.map((r) => r.transferId!))];
+  const transfers = await db.transfer.findMany({
+    where: { id: { in: transferIds } },
+    select: {
+      id: true,
+      toSite: { select: { bookId: true, book: { select: { name: true } } } },
+    },
+  });
+  const transferMap = new Map(transfers.map((t) => [t.id, t]));
+
+  const pairMap = new Map<string, InterBookTransfer>();
+  for (const row of transferOutRows) {
+    const transfer = transferMap.get(row.transferId!);
+    if (!transfer) continue;
+    const fromBookId = row.site.bookId;
+    const toBookId = transfer.toSite.bookId;
+    if (fromBookId === toBookId) continue; // same book — not an inter-book movement
+
+    const key = `${fromBookId}->${toBookId}`;
+    let entry = pairMap.get(key);
+    if (!entry) {
+      entry = {
+        fromBookId,
+        fromBookName: row.site.book.name,
+        toBookId,
+        toBookName: transfer.toSite.book.name,
+        qty: 0,
+        value: 0,
+      };
+      pairMap.set(key, entry);
+    }
+    entry.qty += Math.abs(row.quantity);
+    entry.value += Math.abs(row.totalValue ?? 0);
+  }
+
+  return [...pairMap.values()].sort((a, b) => b.value - a.value);
 }
