@@ -14,7 +14,7 @@ const jarsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "JARS Inventory",
+  title: "JARS Cannabis Arizona | Consumable Management",
   description: "Consumable inventory tracking across sites and books",
 };
 

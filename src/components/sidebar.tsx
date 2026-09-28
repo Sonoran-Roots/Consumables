@@ -141,7 +141,7 @@ export default function Sidebar() {
         collapsed ? "w-16" : "w-64"
       }`}
     >
-      <div className="flex h-14 shrink-0 items-center gap-2 bg-black px-3">
+      <div className="flex h-16 shrink-0 items-center gap-2 bg-black px-3">
         <button
           type="button"
           onClick={() => setCollapsed((c) => !c)}
@@ -155,12 +155,15 @@ export default function Sidebar() {
           )}
         </button>
         {!collapsed && (
-          <span className="truncate leading-tight">
-            <span className="block text-base font-black tracking-tight text-white">
-              JARS
+          <span className="min-w-0 flex-1 leading-tight">
+            <span
+              className="block truncate text-sm font-black tracking-tight text-white"
+              title="JARS Cannabis Arizona"
+            >
+              JARS Cannabis Arizona
             </span>
-            <span className="block text-[10px] font-semibold tracking-[0.2em] text-white/60">
-              INVENTORY
+            <span className="block truncate text-[10px] font-semibold tracking-[0.15em] text-white/60">
+              CONSUMABLE MANAGEMENT
             </span>
           </span>
         )}

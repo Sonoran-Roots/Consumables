@@ -119,8 +119,12 @@ export default function KioskCheckout({
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-white p-6">
         <div className="text-center">
-          <div className="text-3xl font-black tracking-tight text-black">JARS</div>
-          <div className="text-xs font-semibold tracking-[0.2em] text-gray-500">INVENTORY</div>
+          <div className="text-2xl font-black tracking-tight text-black">
+            JARS Cannabis Arizona
+          </div>
+          <div className="text-xs font-semibold tracking-[0.2em] text-gray-500">
+            CONSUMABLE MANAGEMENT
+          </div>
         </div>
         <div className="w-full max-w-md">
           <h1 className="mb-4 text-center text-xl font-semibold text-gray-900">
