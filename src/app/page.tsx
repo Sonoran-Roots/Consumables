@@ -4,7 +4,12 @@ import { db } from "@/lib/db";
 // Reads live counts and recent activity — must render per request, not once at build time.
 export const dynamic = "force-dynamic";
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: PageProps<"/">) {
+  const params = await searchParams;
+  const denied = params.denied === "1";
+
   const [itemCount, siteCount, bookCount, openTransfers, recentTransfers] =
     await Promise.all([
       db.item.count(),
@@ -31,6 +36,13 @@ export default async function DashboardPage() {
       <p className="mt-1 text-sm text-gray-500">
         Replacing the spreadsheet system, one book at a time.
       </p>
+
+      {denied && (
+        <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+          Your account doesn&apos;t have access to that page — ask an admin if you think that&apos;s
+          wrong.
+        </p>
+      )}
 
       <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
         {stats.map((s) => (

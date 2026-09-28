@@ -40,6 +40,43 @@ export async function confirmKioskPin(
   return { ok: true };
 }
 
+// Lets a MANAGER/ADMIN employee clear a coworker's forgotten PIN right at
+// the kiosk, no desktop app needed — the approving manager proves it's
+// really them with their own PIN, same as any other kiosk identity check.
+export async function approveKioskPinReset(
+  targetEmployeeId: string,
+  approverEmployeeId: string,
+  approverPin: string
+): Promise<KioskPinResult> {
+  if (!targetEmployeeId || !approverEmployeeId) {
+    return { ok: false, error: "Pick who's approving this." };
+  }
+  if (approverEmployeeId === targetEmployeeId) {
+    return { ok: false, error: "Someone else has to approve this, not you." };
+  }
+  if (!/^\d{4}$/.test(approverPin)) {
+    return { ok: false, error: "PIN must be 4 digits." };
+  }
+
+  const approver = await db.employee.findUnique({
+    where: { id: approverEmployeeId },
+    select: { role: true, pinHash: true },
+  });
+  if (!approver) return { ok: false, error: "Employee not found." };
+  if (approver.role === "USER") {
+    return { ok: false, error: "That person can't approve PIN resets." };
+  }
+  if (!approver.pinHash) {
+    return { ok: false, error: "That manager needs their own PIN set up first." };
+  }
+  if (!verifyPinHash(approverPin, approver.pinHash)) {
+    return { ok: false, error: "Incorrect PIN." };
+  }
+
+  await db.employee.update({ where: { id: targetEmployeeId }, data: { pinHash: null } });
+  return { ok: true };
+}
+
 function parseCheckoutForm(formData: FormData) {
   const siteId = String(formData.get("siteId") ?? "");
   const employeeId = String(formData.get("employeeId") ?? "");

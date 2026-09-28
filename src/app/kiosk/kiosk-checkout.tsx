@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useActionState } from "react";
-import { logKioskCheckout, confirmKioskPin } from "../checkouts/actions";
+import { logKioskCheckout, confirmKioskPin, approveKioskPinReset } from "../checkouts/actions";
 import {
   ChevronDownIcon,
   SearchIcon,
@@ -47,6 +47,16 @@ export default function KioskCheckout({
   const [pinPending, setPinPending] = useState(false);
   const [confirmedPin, setConfirmedPin] = useState<string | null>(null);
 
+  // A MANAGER/ADMIN employee can clear a coworker's forgotten PIN right
+  // here — approveKioskPinReset — instead of someone needing the desktop
+  // app. Entirely separate identity/PIN state from the target employee's
+  // own, since it's a different person entering a different PIN.
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [approverId, setApproverId] = useState<string | null>(null);
+  const [approverPinValue, setApproverPinValue] = useState("");
+  const [approverPinError, setApproverPinError] = useState<string | null>(null);
+  const [approverPending, setApproverPending] = useState(false);
+
   // Remembered per-device — a kiosk tablet lives at one site, so staff
   // shouldn't have to repick it before every checkout.
   useEffect(() => {
@@ -89,8 +99,16 @@ export default function KioskCheckout({
       setPinValue("");
       setPinDraft("");
       setPinError(null);
+      closeForgotFlow();
     }
   }, [state]);
+
+  function closeForgotFlow() {
+    setForgotOpen(false);
+    setApproverId(null);
+    setApproverPinValue("");
+    setApproverPinError(null);
+  }
 
   function selectEmployee(id: string) {
     setEmployeeId(id || null);
@@ -98,8 +116,32 @@ export default function KioskCheckout({
     setPinValue("");
     setPinDraft("");
     setPinError(null);
+    closeForgotFlow();
     const employee = employees.find((e) => e.id === id);
     setPinPhase(id ? (employee?.hasPin ? "verify" : "create-step1") : null);
+  }
+
+  async function submitApproverPin(pin: string) {
+    if (!employeeId || !approverId) return;
+    setApproverPending(true);
+    const result = await approveKioskPinReset(employeeId, approverId, pin);
+    setApproverPending(false);
+    if (result.ok) {
+      closeForgotFlow();
+      setPinPhase("create-step1");
+      setPinValue("");
+      setPinDraft("");
+      setPinError(null);
+    } else {
+      setApproverPinError(result.error);
+      setApproverPinValue("");
+    }
+  }
+
+  function handleApproverPinChange(next: string) {
+    setApproverPinError(null);
+    setApproverPinValue(next);
+    if (next.length === 4) void submitApproverPin(next);
   }
 
   async function confirmPin(pin: string) {
@@ -287,7 +329,7 @@ export default function KioskCheckout({
           </div>
         </div>
 
-        {pinPhase && employeeId && (
+        {pinPhase && employeeId && !forgotOpen && (
           <div className="mb-4">
             <PinPad
               title={
@@ -307,6 +349,70 @@ export default function KioskCheckout({
               disabled={pinPending}
               onChange={handlePinChange}
             />
+            {pinPhase === "verify" && (
+              <button
+                type="button"
+                onClick={() => setForgotOpen(true)}
+                className="mt-3 block w-full text-center text-sm text-gray-500 hover:text-gray-800 hover:underline"
+              >
+                Forgot your PIN? Ask a manager
+              </button>
+            )}
+          </div>
+        )}
+
+        {forgotOpen && employeeId && (
+          <div className="mb-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+            <p className="text-center text-base font-medium text-gray-900">
+              Reset PIN for {selectedEmployee?.name}
+            </p>
+            <p className="mt-0.5 text-center text-sm text-gray-500">
+              A manager or admin enters their own PIN to approve this.
+            </p>
+
+            <div className="relative mt-4">
+              <select
+                value={approverId ?? ""}
+                onChange={(e) => {
+                  setApproverId(e.target.value || null);
+                  setApproverPinValue("");
+                  setApproverPinError(null);
+                }}
+                className="w-full appearance-none rounded-xl border border-gray-300 bg-white py-3 pl-4 pr-10 text-lg text-gray-900"
+              >
+                <option value="" disabled>
+                  Which manager is approving this?
+                </option>
+                {employees
+                  .filter((e) => e.id !== employeeId)
+                  .map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {e.name}
+                    </option>
+                  ))}
+              </select>
+              <ChevronDownIcon className="pointer-events-none absolute right-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+            </div>
+
+            {approverId && (
+              <div className="mt-4">
+                <PinPad
+                  title={`Enter PIN for ${employees.find((e) => e.id === approverId)?.name}`}
+                  value={approverPinValue}
+                  error={approverPinError}
+                  disabled={approverPending}
+                  onChange={handleApproverPinChange}
+                />
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={closeForgotFlow}
+              className="mt-3 block w-full text-center text-sm text-gray-500 hover:text-gray-800 hover:underline"
+            >
+              Cancel
+            </button>
           </div>
         )}
 

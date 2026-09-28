@@ -57,12 +57,12 @@ enum SiteType {
 }
 
 model Employee {
-  id       String  @id @default(cuid())
+  id       String    @id @default(cuid())
   name     String
   initials String? // for mapping legacy "who did this" data
-  site     Site?   @relation(fields: [siteId], references: [id])
+  site     Site?     @relation(fields: [siteId], references: [id])
   siteId   String?
-  isActive Boolean @default(true)
+  isActive Boolean   @default(true)
   // Kiosk PIN (salted+hashed, see src/lib/pin.ts) — verifies who's actually
   // doing a checkout on a shared, location-signed-in tablet, since kiosk
   // staff don't have their own Better Auth accounts. Null = not set up yet;
@@ -71,6 +71,12 @@ model Employee {
   // PIN at the kiosk; an admin can only clear it (forces re-creation) via
   // the employee edit page, never set/view its value.
   pinHash  String?
+  // Kiosk-only authority: a MANAGER/ADMIN employee can approve clearing a
+  // coworker's forgotten PIN right at the kiosk (their own PIN + this role
+  // is the check — see approveKioskPinReset). Unrelated to User.role below,
+  // which gates the desktop app instead; most employees have no User
+  // account at all, so this has to live on Employee, not User.
+  role     StaffRole @default(USER)
 
   inventoryTransactions InventoryTransaction[]
   transfersRequested    Transfer[]                @relation("TransferRequestedBy")
@@ -552,6 +558,15 @@ model VendorCredit {
 // app access.
 // ---------------------------------------------------------------------------
 
+// Shared by Employee.role (kiosk PIN-reset authority) and User.role (desktop
+// app permissions) — two separate concerns on two separate models, but the
+// same three tiers, so one enum instead of duplicating it.
+enum StaffRole {
+  USER
+  MANAGER
+  ADMIN
+}
+
 model User {
   id            String   @id
   name          String
@@ -560,6 +575,14 @@ model User {
   image         String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+
+  // Both wired into Better Auth's session via user.additionalFields in
+  // src/lib/auth.ts (input: false — never settable by the account holder,
+  // only by an admin via /users). isPurchasingTeam is the hard gate: false
+  // means every desktop-app route redirects to /kiosk regardless of role.
+  // role only matters once isPurchasingTeam is true.
+  role             StaffRole @default(USER)
+  isPurchasingTeam Boolean   @default(false)
 
   sessions Session[]
   accounts Account[]

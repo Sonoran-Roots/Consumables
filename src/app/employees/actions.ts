@@ -3,6 +3,7 @@
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import type { StaffRole } from "@prisma/client";
 
 export type CreateEmployeeState = { error?: string } | null;
 
@@ -44,6 +45,7 @@ export async function updateEmployee(
   const initials = String(formData.get("initials") ?? "").trim() || null;
   const siteId = String(formData.get("siteId") ?? "") || null;
   const isActive = formData.get("isActive") === "on";
+  const role = String(formData.get("role") ?? "USER") as StaffRole;
 
   if (!employeeId || !name) {
     return { error: "Name is required." };
@@ -51,7 +53,7 @@ export async function updateEmployee(
 
   await db.employee.update({
     where: { id: employeeId },
-    data: { name, initials, siteId, isActive },
+    data: { name, initials, siteId, isActive, role },
   });
 
   revalidatePath("/employees");

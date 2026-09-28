@@ -81,6 +81,26 @@ export default function EmployeeEditForm({
         Active
       </label>
 
+      <div>
+        <label className="block text-sm font-medium text-gray-700">Kiosk PIN-reset authority</label>
+        <select
+          name="role"
+          defaultValue={employee.role}
+          className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+        >
+          <option value="USER">User — can't approve PIN resets</option>
+          <option value="MANAGER">Manager — can approve a coworker's forgotten-PIN reset at the kiosk</option>
+          <option value="ADMIN">Admin — same as Manager, for kiosk purposes</option>
+        </select>
+        <p className="mt-1 text-xs text-gray-500">
+          Unrelated to desktop app access — that&apos;s managed separately at{" "}
+          <a href="/users" className="underline">
+            App users
+          </a>
+          .
+        </p>
+      </div>
+
       <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
         <p className="text-sm font-medium text-gray-700">Kiosk PIN</p>
         {pinCleared || !hasPin ? (

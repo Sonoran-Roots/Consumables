@@ -4,6 +4,7 @@ import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "@/lib/auth-client";
+import { minRoleFor, roleAtLeast } from "@/lib/access";
 import {
   MenuIcon,
   ChevronLeftIcon,
@@ -66,9 +67,25 @@ const GROUPS: Group[] = [
       { href: "/employees", label: "Employees" },
       { href: "/categories", label: "Categories" },
       { href: "/units", label: "Units of measure" },
+      { href: "/users", label: "App users" },
     ],
   },
 ];
+
+// Mirrors src/lib/access.ts's route matrix so the sidebar never shows a
+// link the proxy would just bounce off — purely a UX nicety, not the
+// security boundary (the proxy re-checks on every navigation regardless).
+function visibleGroups(role: string | undefined): Group[] {
+  return GROUPS.map((group) => {
+    if (group.href) {
+      return roleAtLeast(role, minRoleFor(group.href)) ? group : null;
+    }
+    const children = (group.children ?? []).filter((leaf) =>
+      roleAtLeast(role, minRoleFor(leaf.href))
+    );
+    return children.length > 0 ? { ...group, children } : null;
+  }).filter((g): g is Group => g !== null);
+}
 
 function isGroupActive(group: Group, pathname: string) {
   if (group.href) return group.href === "/" ? pathname === "/" : pathname.startsWith(group.href);
@@ -117,8 +134,9 @@ export default function Sidebar() {
   );
   const setCollapsed = (value: boolean | ((prev: boolean) => boolean)) =>
     setCollapsedStore(typeof value === "function" ? value(getCollapsedSnapshot()) : value);
+  const groups = visibleGroups(session?.user?.role as string | undefined);
   const [expanded, setExpanded] = useState<Set<string>>(
-    () => new Set(GROUPS.filter((g) => isGroupActive(g, pathname)).map((g) => g.key))
+    () => new Set(groups.filter((g) => isGroupActive(g, pathname)).map((g) => g.key))
   );
 
   function toggleGroup(key: string) {
@@ -170,7 +188,7 @@ export default function Sidebar() {
       </div>
 
       <div className="flex-1 overflow-y-auto py-2">
-        {GROUPS.map((group) => {
+        {groups.map((group) => {
           const Icon = group.icon;
           const active = isGroupActive(group, pathname);
           const isOpen = expanded.has(group.key);

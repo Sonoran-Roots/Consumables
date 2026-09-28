@@ -24,5 +24,22 @@ export const auth = betterAuth({
   // deployment is currently serving the request, so this trusts that one
   // too without hardcoding anything.
   trustedOrigins: process.env.VERCEL_URL ? [`https://${process.env.VERCEL_URL}`] : [],
+  user: {
+    additionalFields: {
+      // input: false — never settable by the account holder (sign-up or
+      // otherwise), only by an admin via /users. See prisma/schema.prisma's
+      // StaffRole/User comments for what these actually gate.
+      role: { type: "string", defaultValue: "USER", input: false, required: false },
+      isPurchasingTeam: { type: "boolean", defaultValue: false, input: false, required: false },
+    },
+  },
+  session: {
+    // src/proxy.ts reads role/isPurchasingTeam from this signed cookie on
+    // every request to decide access — without caching, that would mean a
+    // full DB round trip per navigation. A stale cache (up to 5 min) just
+    // means a just-changed role takes a few minutes to take effect, which
+    // is an acceptable trade for not hitting the DB on every page load.
+    cookieCache: { enabled: true },
+  },
   plugins: [nextCookies()],
 });
