@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import SiteFilter from "./site-filter";
+import ExportCsvButton from "./export-csv-button";
 
 export default async function InventoryPage({
   searchParams,
@@ -41,6 +42,15 @@ export default async function InventoryPage({
     }))
     .sort((a, b) => a.item.name.localeCompare(b.item.name));
 
+  const selectedSite = selectedSiteId ? siteById.get(selectedSiteId) ?? sites.find((s) => s.id === selectedSiteId) : undefined;
+  const csvRows = rows.map((row) => ({
+    itemName: row.item.name,
+    siteName: row.site.name,
+    categoryName: row.item.category.name,
+    onHand: row.onHand,
+    uom: row.item.defaultUom.code,
+  }));
+
   return (
     <div>
       <div className="flex items-center justify-between">
@@ -51,6 +61,10 @@ export default async function InventoryPage({
             transaction ledger.
           </p>
         </div>
+        <ExportCsvButton
+          rows={csvRows}
+          siteLabel={selectedSite ? selectedSite.name.replace(/\s+/g, "-") : "all-sites"}
+        />
       </div>
 
       <div className="mt-4">
