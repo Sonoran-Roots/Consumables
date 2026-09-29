@@ -1,7 +1,9 @@
 "use server";
 
 import { db } from "@/lib/db";
+import { auth } from "@/lib/auth";
 import { hashPin, verifyPinHash } from "@/lib/pin";
+import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -38,6 +40,53 @@ export async function confirmKioskPin(
     return { ok: false, error: "Incorrect PIN." };
   }
   return { ok: true };
+}
+
+export type CreateKioskUserResult =
+  | { ok: true; employee: { id: string; name: string } }
+  | { ok: false; error: string };
+
+// Lets a brand-new employee add themselves at the kiosk: name + their own PIN,
+// nothing else. Same self-serve spirit as confirmKioskPin's first-use PIN
+// creation, just for someone who isn't in the employee list yet. Always
+// role USER (no PIN-reset authority) and never linked to a login — an admin
+// can promote or deactivate them later from the Employees page. Still needs
+// the kiosk tablet's own signed-in session, like everything else under /kiosk.
+export async function createKioskUser(
+  name: string,
+  pin: string,
+  siteId: string | null
+): Promise<CreateKioskUserResult> {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) return { ok: false, error: "This kiosk isn't signed in." };
+
+  const cleanName = name.replace(/\s+/g, " ").trim();
+  if (cleanName.length < 2) return { ok: false, error: "Enter your full name." };
+  if (cleanName.length > 60) return { ok: false, error: "That name is too long." };
+  if (!/^\d{4}$/.test(pin)) return { ok: false, error: "PIN must be 4 digits." };
+
+  const existing = await db.employee.findFirst({
+    where: { name: { equals: cleanName, mode: "insensitive" }, isActive: true },
+    select: { id: true },
+  });
+  if (existing) {
+    return {
+      ok: false,
+      error: "Someone with that name is already on the list — pick your name from the dropdown instead.",
+    };
+  }
+
+  const site = siteId
+    ? await db.site.findUnique({ where: { id: siteId }, select: { id: true } })
+    : null;
+
+  const employee = await db.employee.create({
+    data: { name: cleanName, siteId: site?.id ?? null, pinHash: hashPin(pin) },
+    select: { id: true, name: true },
+  });
+
+  revalidatePath("/employees");
+  return { ok: true, employee };
 }
 
 // Lets a MANAGER/ADMIN employee clear a coworker's forgotten PIN right at

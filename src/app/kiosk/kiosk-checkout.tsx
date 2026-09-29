@@ -10,6 +10,7 @@ import {
   XIcon,
 } from "@/components/icons";
 import PinPad from "./pin-pad";
+import NewKioskUser from "./new-kiosk-user";
 
 type Site = { id: string; name: string };
 type Employee = { id: string; name: string; hasPin: boolean };
@@ -18,10 +19,12 @@ type CartLine = { itemId: string; name: string; quantity: number };
 type PinPhase = "verify" | "create-step1" | "create-step2" | null;
 
 const SITE_KEY = "kiosk-site-id";
+// Sentinel <option> value for "Create new kiosk user" in the name dropdown.
+const NEW_USER = "__new__";
 
 export default function KioskCheckout({
   sites,
-  employees,
+  employees: serverEmployees,
   items,
 }: {
   sites: Site[];
@@ -29,6 +32,17 @@ export default function KioskCheckout({
   items: Item[];
 }) {
   const [siteId, setSiteId] = useState<string | null>(null);
+  // People who signed themselves up on this tablet since the page loaded —
+  // merged into the dropdown right away so they don't wait on a refetch.
+  const [addedEmployees, setAddedEmployees] = useState<Employee[]>([]);
+  const [signupOpen, setSignupOpen] = useState(false);
+  const employees = useMemo(
+    () =>
+      [...serverEmployees, ...addedEmployees.filter((a) => !serverEmployees.some((s) => s.id === a.id))].sort(
+        (a, b) => a.name.localeCompare(b.name)
+      ),
+    [serverEmployees, addedEmployees]
+  );
   const [siteLoaded, setSiteLoaded] = useState(false);
   const [isReturn, setIsReturn] = useState(false);
   const [employeeId, setEmployeeId] = useState<string | null>(null);
@@ -110,7 +124,28 @@ export default function KioskCheckout({
     setApproverPinError(null);
   }
 
+  function openSignup() {
+    selectEmployee("");
+    setSignupOpen(true);
+  }
+
+  function handleSignedUp(employee: { id: string; name: string }, pin: string) {
+    setAddedEmployees((prev) => [...prev, { id: employee.id, name: employee.name, hasPin: true }]);
+    setSignupOpen(false);
+    // They just chose this PIN and the server stored it — straight to checkout.
+    setEmployeeId(employee.id);
+    setConfirmedPin(pin);
+    setPinPhase(null);
+    setPinValue("");
+    setPinDraft("");
+    setPinError(null);
+  }
+
   function selectEmployee(id: string) {
+    if (id === NEW_USER) {
+      openSignup();
+      return;
+    }
     setEmployeeId(id || null);
     setConfirmedPin(null);
     setPinValue("");
@@ -239,20 +274,29 @@ export default function KioskCheckout({
           </div>
         </div>
         <div className="w-full max-w-md">
-          <h1 className="mb-4 text-center text-xl font-semibold text-gray-900">
+          <label
+            htmlFor="kiosk-site"
+            className="mb-4 block text-center text-xl font-semibold text-gray-900"
+          >
             Which site is this?
-          </h1>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {sites.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => chooseSite(s.id)}
-                className="rounded-2xl border border-gray-200 bg-white px-6 py-5 text-lg font-medium text-gray-900 shadow-sm transition-colors active:bg-[#eef6f0]"
-              >
-                {s.name}
-              </button>
-            ))}
+          </label>
+          <div className="relative">
+            <select
+              id="kiosk-site"
+              value=""
+              onChange={(e) => e.target.value && chooseSite(e.target.value)}
+              className="w-full appearance-none rounded-xl border border-gray-300 bg-white py-4 pl-4 pr-10 text-lg text-gray-900 shadow-sm"
+            >
+              <option value="" disabled>
+                Select a location…
+              </option>
+              {sites.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+            <ChevronDownIcon className="pointer-events-none absolute right-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
           </div>
         </div>
       </div>
@@ -301,7 +345,37 @@ export default function KioskCheckout({
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 pb-48">
-        <div className="mb-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+        {!identityConfirmed && !signupOpen && (
+          <div className="mb-4 flex justify-center">
+            <button
+              type="button"
+              onClick={openSignup}
+              className="kiosk-bubble relative rounded-full bg-[#134229] px-5 py-2.5 text-base font-bold text-white shadow-lg ring-4 ring-[#d4edd6] active:scale-95"
+            >
+              <span aria-hidden className="mr-1.5">🫧</span>
+              Need a Pin? Click Here
+              <span
+                aria-hidden
+                className="absolute -bottom-1.5 left-8 h-3.5 w-3.5 rotate-45 bg-[#134229]"
+              />
+            </button>
+          </div>
+        )}
+
+        {signupOpen && (
+          <NewKioskUser
+            siteId={siteId}
+            siteName={site?.name}
+            onCreated={handleSignedUp}
+            onCancel={() => setSignupOpen(false)}
+          />
+        )}
+
+        <div
+          className={`mb-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm ${
+            signupOpen ? "hidden" : ""
+          }`}
+        >
           <label
             htmlFor="kiosk-employee"
             className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-gray-700"
@@ -319,6 +393,7 @@ export default function KioskCheckout({
               <option value="" disabled>
                 Select your name…
               </option>
+              <option value={NEW_USER}>＋ Create new kiosk user</option>
               {employees.map((e) => (
                 <option key={e.id} value={e.id}>
                   {e.name}
@@ -416,7 +491,7 @@ export default function KioskCheckout({
           </div>
         )}
 
-        {!employeeId && (
+        {!employeeId && !signupOpen && (
           <div className="flex flex-col items-center gap-2 py-10 text-gray-400">
             <UserIcon className="h-8 w-8" />
             <p>Pick who this is to get started.</p>
@@ -519,7 +594,9 @@ export default function KioskCheckout({
 
       <form
         action={formAction}
-        className="fixed bottom-0 left-0 right-0 border-t border-gray-200 bg-white p-4"
+        className={`fixed bottom-0 left-0 right-0 border-t border-gray-200 bg-white p-4 ${
+          signupOpen ? "hidden" : ""
+        }`}
       >
         <input type="hidden" name="siteId" value={siteId} />
         <input type="hidden" name="employeeId" value={employeeId ?? ""} />

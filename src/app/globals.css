@@ -1,5 +1,21 @@
 @import "tailwindcss";
 
+/* Kiosk "Need a Pin?" bubble — a little dance so it catches the eye of
+ * someone walking up to the tablet. Static for anyone who prefers less motion. */
+@keyframes kiosk-bubble-dance {
+  0%, 100% { transform: translateY(0) rotate(-3deg) scale(1); }
+  20% { transform: translateY(-8px) rotate(3deg) scale(1.05); }
+  40% { transform: translateY(0) rotate(-4deg) scale(0.97); }
+  60% { transform: translateY(-5px) rotate(4deg) scale(1.04); }
+  80% { transform: translateY(0) rotate(-2deg) scale(1); }
+}
+.kiosk-bubble {
+  animation: kiosk-bubble-dance 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .kiosk-bubble { animation: none; }
+}
+
 /* JARS Cannabis Design System — see scripts/jars-rebrand.mjs for the
  * page-level color remap; this file carries the font and token wiring. */
 @theme inline {
