@@ -18,8 +18,8 @@ export default async function TransfersPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-center justify-between gap-4">
+        <div className="min-w-0">
           <h1 className="text-xl font-semibold text-gray-900">Transfers</h1>
           <p className="mt-1 text-sm text-gray-500">
             Every transfer has a real header, a status, and works across books.
@@ -27,7 +27,7 @@ export default async function TransfersPage() {
         </div>
         <Link
           href="/transfers/new"
-          className="rounded-md border border-black bg-black px-3 py-2 text-sm font-medium text-white hover:bg-white hover:text-black"
+          className="shrink-0 whitespace-nowrap rounded-md border border-black bg-black px-3 py-2 text-sm font-medium text-white hover:bg-white hover:text-black"
         >
           New transfer
         </Link>

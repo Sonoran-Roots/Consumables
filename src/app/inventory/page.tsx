@@ -53,18 +53,20 @@ export default async function InventoryPage({
 
   return (
     <div>
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-center justify-between gap-4">
+        <div className="min-w-0">
           <h1 className="text-xl font-semibold text-gray-900">Current inventory</h1>
           <p className="mt-1 text-sm text-gray-500">
             One authoritative on-hand number per item/site, computed live from the
             transaction ledger.
           </p>
         </div>
-        <ExportCsvButton
-          rows={csvRows}
-          siteLabel={selectedSite ? selectedSite.name.replace(/\s+/g, "-") : "all-sites"}
-        />
+        <div className="shrink-0 whitespace-nowrap">
+          <ExportCsvButton
+            rows={csvRows}
+            siteLabel={selectedSite ? selectedSite.name.replace(/\s+/g, "-") : "all-sites"}
+          />
+        </div>
       </div>
 
       <div className="mt-4">

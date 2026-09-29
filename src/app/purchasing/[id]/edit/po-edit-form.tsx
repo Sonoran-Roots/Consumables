@@ -167,7 +167,7 @@ export default function PurchaseOrderEditForm({
                   name="itemId"
                   value={line.itemId}
                   onChange={(e) => updateLine(i, { itemId: e.target.value })}
-                  className="rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+                  className="w-full min-w-0 rounded-md border border-gray-300 px-2 py-1.5 text-sm"
                 >
                   <option value="">Select item…</option>
                   {items.map((item) => (
@@ -183,7 +183,7 @@ export default function PurchaseOrderEditForm({
                   min="0"
                   value={line.quantityOrdered}
                   onChange={(e) => updateLine(i, { quantityOrdered: e.target.value })}
-                  className="rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+                  className="w-full min-w-0 rounded-md border border-gray-300 px-2 py-1.5 text-sm"
                 />
                 <input
                   name="unitCost"
@@ -192,7 +192,7 @@ export default function PurchaseOrderEditForm({
                   min="0"
                   value={line.unitCost}
                   onChange={(e) => updateLine(i, { unitCost: e.target.value })}
-                  className="rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+                  className="w-full min-w-0 rounded-md border border-gray-300 px-2 py-1.5 text-sm"
                 />
                 <span className="flex items-center text-sm text-gray-600">
                   {lineTotal > 0 ? `$${lineTotal.toFixed(2)}` : "—"}

@@ -39,8 +39,8 @@ export default async function ItemsPage({
 
   return (
     <div>
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-center justify-between gap-4">
+        <div className="min-w-0">
           <h1 className="text-xl font-semibold text-gray-900">Items</h1>
           <p className="mt-1 text-sm text-gray-500">
             The item master — every item is tracked by a real ID, not a free-text name.
@@ -48,7 +48,7 @@ export default async function ItemsPage({
         </div>
         <Link
           href="/items/new"
-          className="rounded-md border border-black bg-black px-3 py-2 text-sm font-medium text-white hover:bg-white hover:text-black"
+          className="shrink-0 whitespace-nowrap rounded-md border border-black bg-black px-3 py-2 text-sm font-medium text-white hover:bg-white hover:text-black"
         >
           New item
         </Link>

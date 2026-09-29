@@ -16,8 +16,8 @@ export default async function ReconciliationListPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-center justify-between gap-4">
+        <div className="min-w-0">
           <h1 className="text-xl font-semibold text-gray-900">
             Inventory reconciliation
           </h1>
@@ -27,7 +27,7 @@ export default async function ReconciliationListPage() {
             audit for that site to be linked.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex shrink-0 gap-2 whitespace-nowrap">
           <Link
             href="/reconciliation/report"
             className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50"

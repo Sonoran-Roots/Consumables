@@ -12,14 +12,14 @@ export default async function CheckoutsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-center justify-between gap-4">
+        <div className="min-w-0">
           <h1 className="text-xl font-semibold text-gray-900">Checkouts</h1>
           <p className="mt-1 text-sm text-gray-500">
             Every checkout is tied to a real employee, with an optional purpose.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex shrink-0 gap-2 whitespace-nowrap">
           <Link
             href="/kiosk"
             target="_blank"
