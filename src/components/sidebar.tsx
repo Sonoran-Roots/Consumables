@@ -6,7 +6,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "@/lib/auth-client";
 import { minRoleFor, roleAtLeast } from "@/lib/access";
 import {
-  MenuIcon,
   ChevronLeftIcon,
   ChevronDownIcon,
   DashboardIcon,
@@ -16,6 +15,7 @@ import {
   GearIcon,
 } from "./icons";
 import type { ComponentType } from "react";
+import JarsLogo from "./jars-logo";
 
 type Leaf = { href: string; label: string };
 type Group = {
@@ -159,30 +159,40 @@ export default function Sidebar() {
       }`}
     >
       <div className="flex h-16 shrink-0 items-center gap-2 bg-black px-3">
-        <button
-          type="button"
-          onClick={() => setCollapsed((c) => !c)}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-white/70 hover:bg-white/10 hover:text-white"
-          title={collapsed ? "Expand menu" : "Collapse menu"}
-        >
-          {collapsed ? (
-            <MenuIcon className="h-5 w-5" />
-          ) : (
-            <ChevronLeftIcon className="h-5 w-5" />
-          )}
-        </button>
-        {!collapsed && (
-          <span className="min-w-0 flex-1 leading-tight">
-            <span
-              className="block truncate text-sm font-black tracking-tight text-white"
-              title="JARS Cannabis Arizona"
+        {collapsed ? (
+          <button
+            type="button"
+            onClick={() => setCollapsed(false)}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full hover:opacity-80"
+            title="Expand menu"
+          >
+            <JarsLogo size={40} />
+          </button>
+        ) : (
+          <>
+            <Link href="/" className="shrink-0" title="Home">
+              <JarsLogo size={40} />
+            </Link>
+            <span className="min-w-0 flex-1 leading-tight">
+              <span
+                className="block truncate text-sm font-black tracking-tight text-white"
+                title="JARS Cannabis Arizona"
+              >
+                JARS Cannabis Arizona
+              </span>
+              <span className="block truncate text-[10px] font-semibold tracking-[0.15em] text-white/60">
+                CONSUMABLE MANAGEMENT
+              </span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setCollapsed(true)}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-white/70 hover:bg-white/10 hover:text-white"
+              title="Collapse menu"
             >
-              JARS Cannabis Arizona
-            </span>
-            <span className="block truncate text-[10px] font-semibold tracking-[0.15em] text-white/60">
-              CONSUMABLE MANAGEMENT
-            </span>
-          </span>
+              <ChevronLeftIcon className="h-5 w-5" />
+            </button>
+          </>
         )}
       </div>
 

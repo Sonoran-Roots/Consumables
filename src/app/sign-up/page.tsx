@@ -1,5 +1,6 @@
 import Link from "next/link";
 import SignUpForm from "./sign-up-form";
+import JarsLogo from "@/components/jars-logo";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +11,8 @@ export const dynamic = "force-dynamic";
 export default function SignUpPage() {
   return (
     <div className="flex min-h-screen w-full flex-col items-center justify-center gap-6 bg-white p-6">
-      <div className="text-center">
+      <div className="flex flex-col items-center text-center">
+        <JarsLogo size={96} className="mb-4" />
         <div className="text-2xl font-black tracking-tight text-black">
           JARS Cannabis Arizona
         </div>

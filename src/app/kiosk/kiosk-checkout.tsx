@@ -11,6 +11,7 @@ import {
 } from "@/components/icons";
 import PinPad from "./pin-pad";
 import NewKioskUser from "./new-kiosk-user";
+import JarsLogo from "@/components/jars-logo";
 
 type Site = { id: string; name: string };
 type Employee = { id: string; name: string; hasPin: boolean };
@@ -265,7 +266,8 @@ export default function KioskCheckout({
   if (!siteId) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-white p-6">
-        <div className="text-center">
+        <div className="flex flex-col items-center text-center">
+          <JarsLogo size={112} className="mb-4" />
           <div className="text-2xl font-black tracking-tight text-black">
             JARS Cannabis Arizona
           </div>
