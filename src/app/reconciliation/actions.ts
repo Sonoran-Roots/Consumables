@@ -12,7 +12,12 @@ async function writeLines(reconciliationId: string, lines: LineComputation[]) {
   await db.$transaction([
     db.reconciliationLine.deleteMany({ where: { reconciliationId } }),
     db.reconciliationLine.createMany({
-      data: lines.map((l) => ({ reconciliationId, ...l })),
+      // materialType is on LineComputation for the finance/usage reports,
+      // but isn't a ReconciliationLine column — drop it before persisting.
+      data: lines.map(({ materialType: _materialType, ...l }) => ({
+        reconciliationId,
+        ...l,
+      })),
     }),
   ]);
 }
