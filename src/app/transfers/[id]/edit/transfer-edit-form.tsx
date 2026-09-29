@@ -2,6 +2,8 @@
 
 import { useActionState, useState } from "react";
 import { updateTransfer } from "../../actions";
+import TransferLinesEditor, { newLine } from "../../transfer-lines-editor";
+import { costKey } from "@/lib/cost-allocation";
 import type { Site, Item, Employee, Book, Transfer, TransferLine } from "@prisma/client";
 
 type SiteWithBook = Site & { book: Book };
@@ -19,14 +21,19 @@ export default function TransferEditForm({
   employees: Employee[];
 }) {
   const [state, formAction, pending] = useActionState(updateTransfer, null);
-  const [lines, setLines] = useState(
+  const [fromSiteId, setFromSiteId] = useState(transfer.fromSiteId);
+  // Saved lines are already priced (one per cost layer), so each opens as a
+  // specific-layer choice; switch a line to FIFO to re-price it from stock.
+  const [initialLines] = useState(() =>
     transfer.lines.length > 0
-      ? transfer.lines.map((l) => ({
-          itemId: l.itemId,
-          quantity: String(l.quantity),
-          unitCost: l.unitCost != null ? String(l.unitCost) : "",
-        }))
-      : [{ itemId: "", quantity: "", unitCost: "" }]
+      ? transfer.lines.map((l) =>
+          newLine({
+            itemId: l.itemId,
+            quantity: String(l.quantity),
+            choice: l.unitCost != null ? costKey(l.unitCost) : "FIFO",
+          })
+        )
+      : [newLine()]
   );
 
   return (
@@ -47,7 +54,8 @@ export default function TransferEditForm({
           <select
             name="fromSiteId"
             required
-            defaultValue={transfer.fromSiteId}
+            value={fromSiteId}
+            onChange={(e) => setFromSiteId(e.target.value)}
             className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
           >
             {sites.map((s) => (
@@ -111,63 +119,12 @@ export default function TransferEditForm({
         </div>
       </div>
 
-      <div>
-        <div className="flex items-center justify-between">
-          <label className="block text-sm font-medium text-gray-700">Items *</label>
-          <button
-            type="button"
-            onClick={() =>
-              setLines((prev) => [...prev, { itemId: "", quantity: "", unitCost: "" }])
-            }
-            className="text-sm text-[#134229] hover:underline"
-          >
-            + Add line
-          </button>
-        </div>
-        <div className="mt-2 space-y-2">
-          {lines.map((line, i) => (
-            <div key={i} className="grid grid-cols-[1fr_100px_100px_auto] gap-2">
-              <select
-                name="itemId"
-                defaultValue={line.itemId}
-                className="rounded-md border border-gray-300 px-2 py-2 text-sm"
-              >
-                <option value="">Select item…</option>
-                {items.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-              <input
-                name="quantity"
-                type="number"
-                step="any"
-                min="0"
-                placeholder="Qty"
-                defaultValue={line.quantity}
-                className="rounded-md border border-gray-300 px-2 py-2 text-sm"
-              />
-              <input
-                name="unitCost"
-                type="number"
-                step="any"
-                min="0"
-                placeholder="Unit cost"
-                defaultValue={line.unitCost}
-                className="rounded-md border border-gray-300 px-2 py-2 text-sm"
-              />
-              <button
-                type="button"
-                onClick={() => setLines((prev) => prev.filter((_, idx) => idx !== i))}
-                className="text-xs text-gray-400 hover:text-red-600"
-              >
-                remove
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
+      <TransferLinesEditor
+        items={items}
+        fromSiteId={fromSiteId}
+        excludeTransferId={transfer.id}
+        initialLines={initialLines}
+      />
 
       <div>
         <label className="block text-sm font-medium text-gray-700">Notes</label>

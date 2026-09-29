@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { createTransfer } from "../actions";
+import TransferLinesEditor, { newLine } from "../transfer-lines-editor";
 import type { Site, Item, Employee, Book } from "@prisma/client";
 
 type SiteWithBook = Site & { book: Book };
@@ -16,7 +17,8 @@ export default function TransferForm({
   employees: Employee[];
 }) {
   const [state, formAction, pending] = useActionState(createTransfer, null);
-  const [lineCount, setLineCount] = useState(1);
+  const [fromSiteId, setFromSiteId] = useState("");
+  const [initialLines] = useState(() => [newLine()]);
 
   return (
     <form action={formAction} className="space-y-5">
@@ -34,6 +36,8 @@ export default function TransferForm({
           <select
             name="fromSiteId"
             required
+            value={fromSiteId}
+            onChange={(e) => setFromSiteId(e.target.value)}
             className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
           >
             <option value="">Select…</option>
@@ -78,51 +82,7 @@ export default function TransferForm({
         </select>
       </div>
 
-      <div>
-        <div className="flex items-center justify-between">
-          <label className="block text-sm font-medium text-gray-700">Items *</label>
-          <button
-            type="button"
-            onClick={() => setLineCount((n) => n + 1)}
-            className="text-sm text-[#134229] hover:underline"
-          >
-            + Add line
-          </button>
-        </div>
-        <div className="mt-2 space-y-2">
-          {Array.from({ length: lineCount }).map((_, i) => (
-            <div key={i} className="grid grid-cols-[1fr_100px_100px] gap-2">
-              <select
-                name="itemId"
-                className="rounded-md border border-gray-300 px-2 py-2 text-sm"
-              >
-                <option value="">Select item…</option>
-                {items.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-              <input
-                name="quantity"
-                type="number"
-                step="any"
-                min="0"
-                placeholder="Qty"
-                className="rounded-md border border-gray-300 px-2 py-2 text-sm"
-              />
-              <input
-                name="unitCost"
-                type="number"
-                step="any"
-                min="0"
-                placeholder="Unit cost"
-                className="rounded-md border border-gray-300 px-2 py-2 text-sm"
-              />
-            </div>
-          ))}
-        </div>
-      </div>
+      <TransferLinesEditor items={items} fromSiteId={fromSiteId} initialLines={initialLines} />
 
       <div>
         <label className="block text-sm font-medium text-gray-700">Notes</label>

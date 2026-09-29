@@ -3,6 +3,33 @@
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { getCostLayers, resolveTransferLines } from "@/lib/cost-layers";
+import type { CostLayer } from "@/lib/cost-allocation";
+
+// What the transfer form offers for one item at the source site: the cost
+// layers still on hand there, so someone can keep the FIFO default or pick
+// a specific priced batch. Pass excludeTransferId when editing so the
+// transfer's own stock isn't counted as already gone.
+export async function getLayerOptions(
+  itemId: string,
+  siteId: string,
+  excludeTransferId?: string
+): Promise<CostLayer[]> {
+  if (!itemId || !siteId) return [];
+  return getCostLayers(itemId, siteId, { excludeTransferId });
+}
+
+// Reads the repeated line fields off the form. Costs are never entered by
+// hand — each line carries a costChoice ("FIFO" or a chosen layer's cost)
+// and the real unit costs are resolved from stock layers on the server.
+function readLineRequests(formData: FormData) {
+  const itemIds = formData.getAll("itemId").map(String);
+  const quantities = formData.getAll("quantity").map(Number);
+  const choices = formData.getAll("costChoice").map(String);
+  return itemIds
+    .map((itemId, i) => ({ itemId, quantity: quantities[i], choice: choices[i] || "FIFO" }))
+    .filter((l) => l.itemId && l.quantity > 0);
+}
 
 export type CreateTransferState = { error?: string } | null;
 
@@ -15,10 +42,6 @@ export async function createTransfer(
   const requestedById = String(formData.get("requestedById") ?? "") || null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
 
-  const itemIds = formData.getAll("itemId").map(String);
-  const quantities = formData.getAll("quantity").map(Number);
-  const unitCosts = formData.getAll("unitCost").map((v) => (v === "" ? null : Number(v)));
-
   if (!fromSiteId || !toSiteId) {
     return { error: "Please choose both a source and destination site." };
   }
@@ -26,17 +49,13 @@ export async function createTransfer(
     return { error: "Source and destination site must be different." };
   }
 
-  const lines = itemIds
-    .map((itemId, i) => ({
-      itemId,
-      quantity: quantities[i],
-      unitCost: unitCosts[i] ?? undefined,
-    }))
-    .filter((l) => l.itemId && l.quantity > 0);
-
-  if (lines.length === 0) {
+  const requests = readLineRequests(formData);
+  if (requests.length === 0) {
     return { error: "Add at least one item with a quantity greater than zero." };
   }
+
+  const resolved = await resolveTransferLines(fromSiteId, requests);
+  if (!resolved.ok) return { error: resolved.error };
 
   const transfer = await db.transfer.create({
     data: {
@@ -44,7 +63,7 @@ export async function createTransfer(
       toSiteId,
       requestedById,
       notes,
-      lines: { create: lines },
+      lines: { create: resolved.lines },
     },
   });
 
@@ -65,10 +84,6 @@ export async function updateTransfer(
   const receivedById = String(formData.get("receivedById") ?? "") || null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
 
-  const itemIds = formData.getAll("itemId").map(String);
-  const quantities = formData.getAll("quantity").map(Number);
-  const unitCosts = formData.getAll("unitCost").map((v) => (v === "" ? null : Number(v)));
-
   if (!transferId || !fromSiteId || !toSiteId) {
     return { error: "Please choose both a source and destination site." };
   }
@@ -76,17 +91,18 @@ export async function updateTransfer(
     return { error: "Source and destination site must be different." };
   }
 
-  const lines = itemIds
-    .map((itemId, i) => ({
-      itemId,
-      quantity: quantities[i],
-      unitCost: unitCosts[i] ?? undefined,
-    }))
-    .filter((l) => l.itemId && l.quantity > 0);
-
-  if (lines.length === 0) {
+  const requests = readLineRequests(formData);
+  if (requests.length === 0) {
     return { error: "Add at least one item with a quantity greater than zero." };
   }
+
+  // Priced against stock as if this transfer hadn't posted yet, so editing a
+  // received transfer doesn't see its own shipment as already gone.
+  const resolved = await resolveTransferLines(fromSiteId, requests, {
+    excludeTransferId: transferId,
+  });
+  if (!resolved.ok) return { error: resolved.error };
+  const lines = resolved.lines;
 
   const existing = await db.transfer.findUniqueOrThrow({ where: { id: transferId } });
 
