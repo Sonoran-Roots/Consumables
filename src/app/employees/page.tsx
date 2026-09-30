@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { roleAtLeast } from "@/lib/access";
 import EmployeeAccessCell from "./employee-access-cell";
+import RemoveEmployeeButton from "./remove-employee-button";
 import StandaloneAccountsTable from "./standalone-accounts-table";
 
 export const dynamic = "force-dynamic";
@@ -86,6 +87,13 @@ export default async function EmployeesPage() {
                   >
                     edit
                   </Link>
+                  {isAdmin && (e.isActive || e.user) && e.user?.id !== session?.user.id && (
+                    <RemoveEmployeeButton
+                      employeeId={e.id}
+                      employeeName={e.name}
+                      hasLogin={!!e.user}
+                    />
+                  )}
                 </td>
               </tr>
             ))}

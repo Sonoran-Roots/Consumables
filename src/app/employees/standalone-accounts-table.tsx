@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { updateUserAccess } from "./actions";
+import { useRouter } from "next/navigation";
+import { removeStandaloneAccount, updateUserAccess } from "./actions";
 import { useSession } from "@/lib/auth-client";
 import type { StaffRole } from "@/lib/access";
 
@@ -16,6 +17,7 @@ type UserRow = {
 const ROLES: StaffRole[] = ["USER", "MANAGER", "ADMIN"];
 
 function Row({ user }: { user: UserRow }) {
+  const router = useRouter();
   const { data: session } = useSession();
   const isSelf = session?.user?.id === user.id;
   const [role, setRole] = useState<StaffRole>(user.role as StaffRole);
@@ -44,6 +46,19 @@ function Row({ user }: { user: UserRow }) {
     }
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  }
+
+  async function handleRemove() {
+    if (!confirm(`Remove ${user.email}? It will stop being able to sign in. This can't be undone.`)) {
+      return;
+    }
+    setError(null);
+    const result = await removeStandaloneAccount(user.id);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    router.refresh();
   }
 
   return (
@@ -90,6 +105,15 @@ function Row({ user }: { user: UserRow }) {
         >
           {saving ? "Saving…" : "Save"}
         </button>
+        {!isSelf && (
+          <button
+            type="button"
+            onClick={handleRemove}
+            className="ml-3 text-xs text-gray-400 hover:text-red-600 hover:underline"
+          >
+            Remove
+          </button>
+        )}
       </td>
     </tr>
   );

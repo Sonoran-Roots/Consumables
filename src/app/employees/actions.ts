@@ -13,6 +13,22 @@ async function requireAdmin() {
   if (!session || !roleAtLeast(session.user.role as string | undefined, "ADMIN")) {
     throw new Error("Only an admin can do that.");
   }
+  return session;
+}
+
+// Would deleting this login leave the app with no working admin? Guards
+// against locking everyone out of the Employees page (the only place access
+// is managed).
+async function isLastAdminLogin(userId: string): Promise<boolean> {
+  const target = await db.user.findUnique({
+    where: { id: userId },
+    select: { role: true, isPurchasingTeam: true },
+  });
+  if (!target || target.role !== "ADMIN" || !target.isPurchasingTeam) return false;
+  const others = await db.user.count({
+    where: { id: { not: userId }, role: "ADMIN", isPurchasingTeam: true },
+  });
+  return others === 0;
 }
 
 export type CreateEmployeeState = { error?: string } | null;
@@ -138,6 +154,99 @@ export async function updateUserAccess(
   }
 
   await db.user.update({ where: { id: userId }, data: { role, isPurchasingTeam } });
+  revalidatePath("/employees");
+  return { ok: true };
+}
+
+export type RemoveResult =
+  | { ok: true; mode: "deleted" | "deactivated" }
+  | { ok: false; error: string };
+
+// Removes a person: their login (if any) is deleted, so they can't sign in
+// to the app, and their PIN is cleared, so it stops working at every kiosk
+// and can be reused. If they have history (checkouts, transfers, audits...)
+// the Employee record itself is kept but marked inactive, so past logs still
+// say who did them and reports don't break; with no history it's deleted
+// outright. Either way they drop off the kiosk's "Forgot your PIN?" list.
+export async function removeEmployee(employeeId: string): Promise<RemoveResult> {
+  let session;
+  try {
+    session = await requireAdmin();
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+
+  const employee = await db.employee.findUnique({
+    where: { id: employeeId },
+    select: {
+      userId: true,
+      _count: {
+        select: {
+          inventoryTransactions: true,
+          transfersRequested: true,
+          transfersReceived: true,
+          checkoutEvents: true,
+          auditsPerformed: true,
+          reconciliationsClosed: true,
+        },
+      },
+    },
+  });
+  if (!employee) return { ok: false, error: "Employee not found." };
+
+  if (employee.userId) {
+    if (employee.userId === session.user.id) {
+      return { ok: false, error: "You can't remove your own account." };
+    }
+    if (await isLastAdminLogin(employee.userId)) {
+      return { ok: false, error: "That's the last admin — make someone else an admin first." };
+    }
+  }
+
+  const hasHistory = Object.values(employee._count).some((n) => n > 0);
+
+  // Login first: Employee.userId is SetNull, so the employee survives it.
+  if (employee.userId) await db.user.delete({ where: { id: employee.userId } });
+
+  if (hasHistory) {
+    await db.employee.update({
+      where: { id: employeeId },
+      data: { isActive: false, pinDigest: null, userId: null },
+    });
+  } else {
+    await db.employee.delete({ where: { id: employeeId } });
+  }
+
+  revalidatePath("/employees");
+  return { ok: true, mode: hasHistory ? "deactivated" : "deleted" };
+}
+
+// Removes one of the "Other accounts" — a login with no employee, typically
+// a shared kiosk tablet's. (People go through removeEmployee instead.)
+export async function removeStandaloneAccount(userId: string): Promise<AppAccessResult> {
+  let session;
+  try {
+    session = await requireAdmin();
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+
+  if (userId === session.user.id) {
+    return { ok: false, error: "You can't remove your own account." };
+  }
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: { employee: { select: { id: true } } },
+  });
+  if (!user) return { ok: false, error: "Account not found." };
+  if (user.employee) {
+    return { ok: false, error: "That login belongs to an employee — remove them instead." };
+  }
+  if (await isLastAdminLogin(userId)) {
+    return { ok: false, error: "That's the last admin — make someone else an admin first." };
+  }
+
+  await db.user.delete({ where: { id: userId } });
   revalidatePath("/employees");
   return { ok: true };
 }
