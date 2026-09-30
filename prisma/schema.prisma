@@ -63,26 +63,29 @@ model Employee {
   site     Site?     @relation(fields: [siteId], references: [id])
   siteId   String?
   isActive Boolean   @default(true)
-  // Kiosk PIN (salted+hashed, see src/lib/pin.ts) — verifies who's actually
-  // doing a checkout on a shared, location-signed-in tablet, since kiosk
-  // staff don't have their own Better Auth accounts. Null = not set up yet;
-  // the kiosk prompts to create one on first use (soft rollout, not
-  // required app-wide). Self-serve by design: an employee sets their own
-  // PIN at the kiosk; an admin can only clear it (forces re-creation) via
-  // the employee edit page, never set/view its value.
-  pinHash  String?
+  // Kiosk PIN, stored only as a keyed digest (HMAC, see src/lib/pin.ts).
+  // The PIN IS the kiosk identity: the checkout screen has no name picker,
+  // it looks the employee up by digest when the PIN is entered — which is
+  // why it has to be globally unique (@unique), and why it's an HMAC rather
+  // than a per-row salted hash (a salt would make the lookup a table scan).
+  // Null = not set up yet (set at the kiosk via "Forgot your PIN?", or at
+  // sign-up for app users). Self-serve by design: an admin can only clear
+  // it from the employee edit page, never set/view its value.
+  pinDigest String? @unique
   // Kiosk-only authority: a MANAGER/ADMIN employee can approve clearing a
   // coworker's forgotten PIN right at the kiosk (their own PIN + this role
   // is the check — see approveKioskPinReset). Unrelated to User.role below,
   // which gates the desktop app instead; most employees have no User
   // account at all, so this has to live on Employee, not User.
   role     StaffRole @default(USER)
-  // Optional link to a Better Auth login (User below) — most employees have
-  // none (kiosk-only), and a few Users (the shared, location-signed-in
-  // kiosk tablets) have no linked Employee either; this only connects the
-  // subset who are both a real staff member AND have desktop app access.
-  // SetNull rather than cascade: deleting someone's login shouldn't delete
-  // their employment record, just their app access.
+  // The Better Auth login (User below) behind this person, if any. An app
+  // user and a kiosk user are the same person: signing up for the app creates
+  // the Employee (and its PIN) in the same step, so every personal login has
+  // one. Employees WITHOUT a login are kiosk-only people who self-registered
+  // on a shared tablet; Users WITHOUT an Employee are those shared,
+  // location-signed-in tablet accounts themselves. SetNull rather than
+  // cascade: deleting someone's login shouldn't delete their employment
+  // record, just their app access.
   user     User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
   userId   String?   @unique
 
@@ -594,8 +597,9 @@ model User {
 
   sessions Session[]
   accounts Account[]
-  // Reverse side of Employee.userId — null for the shared, location-signed-in
-  // kiosk accounts, which are Users but not a real staff Employee.
+  // Reverse side of Employee.userId — null only for the shared,
+  // location-signed-in kiosk tablet accounts, which are Users but not a
+  // person.
   employee Employee?
 }
 

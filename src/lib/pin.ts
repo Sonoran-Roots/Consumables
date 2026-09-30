@@ -1,21 +1,14 @@
-import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { createHmac } from "node:crypto";
 
-const KEY_LENGTH = 32;
-
-// Salted scrypt hash, stored as "<salt-hex>:<hash-hex>" in Employee.pinHash.
-// Same primitive class Better Auth itself uses for passwords — appropriate
-// even for a short numeric PIN, since it's slow-to-brute-force by design.
-export function hashPin(pin: string): string {
-  const salt = randomBytes(16);
-  const hash = scryptSync(pin, salt, KEY_LENGTH);
-  return `${salt.toString("hex")}:${hash.toString("hex")}`;
+// Keyed digest of a kiosk PIN, stored as Employee.pinDigest. Deterministic on
+// purpose: the kiosk identifies who's checking out from the PIN alone, so the
+// stored value has to be directly comparable/lookup-able (and unique-indexed),
+// which a per-row salted hash can't be. Keyed with the server secret so a
+// leaked database alone doesn't hand over the (tiny, 10k-value) PIN space.
+export function digestPin(pin: string): string {
+  const secret = process.env.BETTER_AUTH_SECRET;
+  if (!secret) throw new Error("BETTER_AUTH_SECRET is not set.");
+  return createHmac("sha256", secret).update(`kiosk-pin:${pin}`).digest("hex");
 }
 
-export function verifyPinHash(pin: string, stored: string): boolean {
-  const [saltHex, hashHex] = stored.split(":");
-  if (!saltHex || !hashHex) return false;
-  const salt = Buffer.from(saltHex, "hex");
-  const expected = Buffer.from(hashHex, "hex");
-  const actual = scryptSync(pin, salt, expected.length);
-  return actual.length === expected.length && timingSafeEqual(actual, expected);
-}
+export const PIN_PATTERN = /^\d{4}$/;

@@ -2,68 +2,66 @@
 
 import { db } from "@/lib/db";
 import { auth } from "@/lib/auth";
-import { hashPin, verifyPinHash } from "@/lib/pin";
+import { digestPin, PIN_PATTERN } from "@/lib/pin";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 export type KioskPinResult = { ok: true } | { ok: false; error: string };
 
-// Verifies a kiosk employee's identity against their PIN — or, if they
-// don't have one yet, creates it from this entry (soft rollout: PINs are
-// self-serve and set the first time an employee is used at a kiosk, not
-// pre-provisioned by an admin). Reused both for the kiosk's own immediate
-// PIN-entry feedback and as a server-side re-check inside logKioskCheckout,
-// so the final write can't be reached with a stale/tampered identity.
-export async function confirmKioskPin(
-  employeeId: string,
-  pin: string
-): Promise<KioskPinResult> {
-  if (!employeeId) return { ok: false, error: "Pick who this is first." };
-  if (!/^\d{4}$/.test(pin)) return { ok: false, error: "PIN must be 4 digits." };
+const PIN_TAKEN = "That PIN is already taken by someone else — pick a different one.";
 
-  const employee = await db.employee.findUnique({
-    where: { id: employeeId },
-    select: { pinHash: true },
+// Everything under /kiosk runs on the tablet's own location login (or a
+// person's own login) — actions here refuse to run without a session, same
+// as the pages themselves.
+async function requireSession() {
+  return auth.api.getSession({ headers: await headers() });
+}
+
+// The PIN IS the kiosk identity — there's no name picker. Digest lookup
+// (Employee.pinDigest is unique) finds the one active employee it belongs to.
+async function findEmployeeByPin(pin: string) {
+  if (!PIN_PATTERN.test(pin)) return null;
+  return db.employee.findFirst({
+    where: { pinDigest: digestPin(pin), isActive: true },
+    select: {
+      id: true,
+      name: true,
+      role: true,
+      user: { select: { role: true, isPurchasingTeam: true } },
+    },
   });
-  if (!employee) return { ok: false, error: "Employee not found." };
+}
 
-  if (!employee.pinHash) {
-    await db.employee.update({
-      where: { id: employeeId },
-      data: { pinHash: hashPin(pin) },
-    });
-    return { ok: true };
-  }
-
-  if (!verifyPinHash(pin, employee.pinHash)) {
-    return { ok: false, error: "Incorrect PIN." };
-  }
-  return { ok: true };
+async function pinInUse(pin: string): Promise<boolean> {
+  const taken = await db.employee.findUnique({
+    where: { pinDigest: digestPin(pin) },
+    select: { id: true },
+  });
+  return taken != null;
 }
 
 export type CreateKioskUserResult =
   | { ok: true; employee: { id: string; name: string } }
   | { ok: false; error: string };
 
-// Lets a brand-new employee add themselves at the kiosk: name + their own PIN,
-// nothing else. Same self-serve spirit as confirmKioskPin's first-use PIN
-// creation, just for someone who isn't in the employee list yet. Always
-// role USER (no PIN-reset authority) and never linked to a login — an admin
-// can promote or deactivate them later from the Employees page. Still needs
-// the kiosk tablet's own signed-in session, like everything else under /kiosk.
+// Lets a brand-new person add themselves at the kiosk: name + their own PIN,
+// nothing else. Always role USER (no PIN-reset authority) and never linked
+// to a login — an admin can give them app access or deactivate them later
+// from the Employees page. (People who sign up for the app itself get their
+// Employee + PIN in that same step — see registerAccount.) Still needs the
+// kiosk tablet's own signed-in session, like everything else under /kiosk.
 export async function createKioskUser(
   name: string,
   pin: string,
   siteId: string | null
 ): Promise<CreateKioskUserResult> {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) return { ok: false, error: "This kiosk isn't signed in." };
+  if (!(await requireSession())) return { ok: false, error: "This kiosk isn't signed in." };
 
   const cleanName = name.replace(/\s+/g, " ").trim();
   if (cleanName.length < 2) return { ok: false, error: "Enter your full name." };
   if (cleanName.length > 60) return { ok: false, error: "That name is too long." };
-  if (!/^\d{4}$/.test(pin)) return { ok: false, error: "PIN must be 4 digits." };
+  if (!PIN_PATTERN.test(pin)) return { ok: false, error: "PIN must be 4 digits." };
 
   const existing = await db.employee.findFirst({
     where: { name: { equals: cleanName, mode: "insensitive" }, isActive: true },
@@ -72,57 +70,80 @@ export async function createKioskUser(
   if (existing) {
     return {
       ok: false,
-      error: "Someone with that name is already on the list — pick your name from the dropdown instead.",
+      error:
+        "Someone with that name is already on the list — go back and tap “Forgot your PIN?” to get into your account.",
     };
   }
+  if (await pinInUse(pin)) return { ok: false, error: PIN_TAKEN };
 
   const site = siteId
     ? await db.site.findUnique({ where: { id: siteId }, select: { id: true } })
     : null;
 
-  const employee = await db.employee.create({
-    data: { name: cleanName, siteId: site?.id ?? null, pinHash: hashPin(pin) },
-    select: { id: true, name: true },
-  });
-
-  revalidatePath("/employees");
-  return { ok: true, employee };
+  try {
+    const employee = await db.employee.create({
+      data: { name: cleanName, siteId: site?.id ?? null, pinDigest: digestPin(pin) },
+      select: { id: true, name: true },
+    });
+    revalidatePath("/employees");
+    return { ok: true, employee };
+  } catch (e) {
+    // Lost a race for the same PIN between the check above and the insert.
+    if ((e as { code?: string }).code === "P2002") return { ok: false, error: PIN_TAKEN };
+    throw e;
+  }
 }
 
-// Lets a MANAGER/ADMIN employee clear a coworker's forgotten PIN right at
-// the kiosk, no desktop app needed — the approving manager proves it's
-// really them with their own PIN, same as any other kiosk identity check.
+// Sets a PIN for an employee who has none (never set one, or it was just
+// cleared) — the tail end of "Forgot your PIN?" at the kiosk. Refuses if a
+// PIN already exists, so this can't be used to overwrite someone's live PIN;
+// clearing one first takes an admin (desktop) or a manager's approval
+// (approveKioskPinReset).
+export async function setKioskPin(employeeId: string, pin: string): Promise<KioskPinResult> {
+  if (!(await requireSession())) return { ok: false, error: "This kiosk isn't signed in." };
+  if (!PIN_PATTERN.test(pin)) return { ok: false, error: "PIN must be 4 digits." };
+
+  const employee = await db.employee.findUnique({
+    where: { id: employeeId },
+    select: { pinDigest: true, isActive: true },
+  });
+  if (!employee || !employee.isActive) return { ok: false, error: "Employee not found." };
+  if (employee.pinDigest) return { ok: false, error: "That person already has a PIN." };
+  if (await pinInUse(pin)) return { ok: false, error: PIN_TAKEN };
+
+  try {
+    await db.employee.update({ where: { id: employeeId }, data: { pinDigest: digestPin(pin) } });
+  } catch (e) {
+    if ((e as { code?: string }).code === "P2002") return { ok: false, error: PIN_TAKEN };
+    throw e;
+  }
+  return { ok: true };
+}
+
+// Lets a MANAGER/ADMIN clear a coworker's forgotten PIN right at the kiosk,
+// no desktop app needed. The approver isn't picked from a list — their own
+// PIN identifies them, same as everywhere else on the kiosk — and their role
+// (kiosk role, or desktop-app role for people with a purchasing-team login)
+// decides whether that counts.
 export async function approveKioskPinReset(
   targetEmployeeId: string,
-  approverEmployeeId: string,
   approverPin: string
 ): Promise<KioskPinResult> {
-  if (!targetEmployeeId || !approverEmployeeId) {
-    return { ok: false, error: "Pick who's approving this." };
-  }
-  if (approverEmployeeId === targetEmployeeId) {
+  if (!(await requireSession())) return { ok: false, error: "This kiosk isn't signed in." };
+  if (!targetEmployeeId) return { ok: false, error: "Pick whose PIN to reset." };
+  if (!PIN_PATTERN.test(approverPin)) return { ok: false, error: "PIN must be 4 digits." };
+
+  const approver = await findEmployeeByPin(approverPin);
+  if (!approver) return { ok: false, error: "PIN not recognized." };
+  if (approver.id === targetEmployeeId) {
     return { ok: false, error: "Someone else has to approve this, not you." };
   }
-  if (!/^\d{4}$/.test(approverPin)) {
-    return { ok: false, error: "PIN must be 4 digits." };
-  }
+  const canApprove =
+    approver.role !== "USER" ||
+    (approver.user?.isPurchasingTeam === true && approver.user.role !== "USER");
+  if (!canApprove) return { ok: false, error: "That PIN doesn't belong to a manager or admin." };
 
-  const approver = await db.employee.findUnique({
-    where: { id: approverEmployeeId },
-    select: { role: true, pinHash: true },
-  });
-  if (!approver) return { ok: false, error: "Employee not found." };
-  if (approver.role === "USER") {
-    return { ok: false, error: "That person can't approve PIN resets." };
-  }
-  if (!approver.pinHash) {
-    return { ok: false, error: "That manager needs their own PIN set up first." };
-  }
-  if (!verifyPinHash(approverPin, approver.pinHash)) {
-    return { ok: false, error: "Incorrect PIN." };
-  }
-
-  await db.employee.update({ where: { id: targetEmployeeId }, data: { pinHash: null } });
+  await db.employee.update({ where: { id: targetEmployeeId }, data: { pinDigest: null } });
   return { ok: true };
 }
 
@@ -196,42 +217,41 @@ export async function createCheckout(
 }
 
 export type KioskCheckoutState =
-  | { error: string; success?: undefined }
-  | { success: true; itemCount: number; error?: undefined }
-  | null;
+  | { ok: false; error: string }
+  | { ok: true; itemCount: number; employeeName: string };
 
-// Same posting logic as createCheckout, but returns a result instead of
-// redirecting — the kiosk stays on-screen so the next person can log their
-// checkout immediately, rather than landing on the full desktop /checkouts
-// list.
-export async function logKioskCheckout(
-  _prevState: KioskCheckoutState,
-  formData: FormData
-): Promise<KioskCheckoutState> {
-  const parsed = parseCheckoutForm(formData);
-  const pin = String(formData.get("pin") ?? "");
+// Same posting logic as createCheckout, but for the kiosk: no employee is
+// passed in. Whoever's PIN is entered when they tap "Log checkout" IS the
+// employee the log is assigned to. Returns a result instead of redirecting
+// so the kiosk stays on-screen for the next person.
+export async function logKioskCheckout(input: {
+  siteId: string;
+  isReturn: boolean;
+  lines: { itemId: string; quantity: number }[];
+  pin: string;
+}): Promise<KioskCheckoutState> {
+  if (!(await requireSession())) return { ok: false, error: "This kiosk isn't signed in." };
 
-  if (!parsed.siteId || !parsed.employeeId) {
-    return { error: "Pick a site and who's checking out." };
-  }
-  if (parsed.lines.length === 0) {
-    return { error: "Add at least one item first." };
-  }
+  const lines = input.lines.filter((l) => l.itemId && l.quantity > 0);
+  if (!input.siteId) return { ok: false, error: "Pick a site first." };
+  if (lines.length === 0) return { ok: false, error: "Add at least one item first." };
 
-  // Re-verify server-side even though the kiosk UI already confirmed the
-  // PIN before showing the cart — this is what actually stops the final
-  // write from going through under a different/stale identity, not the
-  // earlier UI step by itself.
-  const pinResult = await confirmKioskPin(parsed.employeeId, pin);
-  if (!pinResult.ok) {
-    return { error: pinResult.error };
-  }
+  const employee = await findEmployeeByPin(input.pin);
+  if (!employee) return { ok: false, error: "PIN not recognized." };
 
-  await postCheckout(parsed);
+  await postCheckout({
+    siteId: input.siteId,
+    employeeId: employee.id,
+    purpose: null,
+    department: null,
+    notes: null,
+    isReturn: input.isReturn,
+    lines,
+  });
 
   revalidatePath("/checkouts");
   revalidatePath("/inventory");
-  return { success: true, itemCount: parsed.lines.length };
+  return { ok: true, itemCount: lines.length, employeeName: employee.name };
 }
 
 export type UpdateCheckoutState = { error?: string } | null;

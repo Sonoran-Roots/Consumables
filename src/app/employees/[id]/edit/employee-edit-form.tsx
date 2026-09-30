@@ -9,7 +9,7 @@ export default function EmployeeEditForm({
   sites,
   hasPin,
 }: {
-  employee: Omit<Employee, "pinHash">;
+  employee: Omit<Employee, "pinDigest">;
   sites: Site[];
   hasPin: boolean;
 }) {
@@ -18,7 +18,7 @@ export default function EmployeeEditForm({
   const [resetting, startReset] = useTransition();
 
   function handleResetPin() {
-    if (!confirm(`Clear ${employee.name}'s kiosk PIN? They'll set a new one next time they check out at a kiosk.`)) {
+    if (!confirm(`Clear ${employee.name}'s kiosk PIN? They'll set a new one at the kiosk (Forgot your PIN?).`)) {
       return;
     }
     startReset(async () => {
@@ -106,14 +106,14 @@ export default function EmployeeEditForm({
         {pinCleared || !hasPin ? (
           <p className="mt-1 text-sm text-gray-500">
             {pinCleared
-              ? "Cleared — they'll be prompted to set a new one next time they check out at a kiosk."
-              : "Not set yet — they'll be prompted to create one the first time they check out at a kiosk."}
+              ? "Cleared — they can set a new one at the kiosk by tapping “Forgot your PIN?”."
+              : "Not set yet — they can create one at the kiosk by tapping “Forgot your PIN?”."}
           </p>
         ) : (
           <>
             <p className="mt-1 text-sm text-gray-500">
-              Set. It's stored hashed — nobody, including you, can view it. If they forgot it,
-              clear it below and they'll set a new one at the kiosk.
+              Set. It's stored as a one-way digest — nobody, including you, can view it. If they
+              forgot it, clear it below and they'll set a new one at the kiosk.
             </p>
             <button
               type="button"

@@ -1,76 +1,62 @@
 "use client";
 
-import { useState, useMemo, useEffect, useActionState } from "react";
-import { logKioskCheckout, confirmKioskPin, approveKioskPinReset } from "../checkouts/actions";
-import {
-  ChevronDownIcon,
-  SearchIcon,
-  UserIcon,
-  CheckCircleIcon,
-  XIcon,
-} from "@/components/icons";
+import { useState, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { logKioskCheckout } from "../checkouts/actions";
+import { ChevronDownIcon, SearchIcon, CheckCircleIcon, XIcon } from "@/components/icons";
 import PinPad from "./pin-pad";
 import NewKioskUser from "./new-kiosk-user";
+import PinRecovery from "./pin-recovery";
 import JarsLogo from "@/components/jars-logo";
 
 type Site = { id: string; name: string };
-type Employee = { id: string; name: string; hasPin: boolean };
+type Person = { id: string; name: string; hasPin: boolean };
 type Item = { id: string; name: string; sku: string | null };
 type CartLine = { itemId: string; name: string; quantity: number };
-type PinPhase = "verify" | "create-step1" | "create-step2" | null;
+type Panel = "signup" | "recovery" | null;
 
 const SITE_KEY = "kiosk-site-id";
-// Sentinel <option> value for "Create new kiosk user" in the name dropdown.
-const NEW_USER = "__new__";
 
 export default function KioskCheckout({
   sites,
-  employees: serverEmployees,
+  people: serverPeople,
   items,
 }: {
   sites: Site[];
-  employees: Employee[];
+  people: Person[];
   items: Item[];
 }) {
+  const router = useRouter();
   const [siteId, setSiteId] = useState<string | null>(null);
-  // People who signed themselves up on this tablet since the page loaded —
-  // merged into the dropdown right away so they don't wait on a refetch.
-  const [addedEmployees, setAddedEmployees] = useState<Employee[]>([]);
-  const [signupOpen, setSignupOpen] = useState(false);
-  const employees = useMemo(
-    () =>
-      [...serverEmployees, ...addedEmployees.filter((a) => !serverEmployees.some((s) => s.id === a.id))].sort(
-        (a, b) => a.name.localeCompare(b.name)
-      ),
-    [serverEmployees, addedEmployees]
-  );
   const [siteLoaded, setSiteLoaded] = useState(false);
   const [isReturn, setIsReturn] = useState(false);
-  const [employeeId, setEmployeeId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
-  const [state, formAction, pending] = useActionState(logKioskCheckout, null);
 
-  // PIN verifies who's actually checking out on this shared, location-signed
-  // tablet — see confirmKioskPin. confirmedPin is only set once the server
-  // has verified (or, first use, created) it; nothing below the PIN step
-  // shows until then.
-  const [pinPhase, setPinPhase] = useState<PinPhase>(null);
+  // People who signed themselves up on this tablet since the page loaded —
+  // merged in right away so "Forgot your PIN?" can find them without a refetch.
+  const [addedPeople, setAddedPeople] = useState<Person[]>([]);
+  const people = useMemo(
+    () =>
+      [...serverPeople, ...addedPeople.filter((a) => !serverPeople.some((s) => s.id === a.id))].sort(
+        (a, b) => a.name.localeCompare(b.name)
+      ),
+    [serverPeople, addedPeople]
+  );
+
+  // Sign-up and PIN recovery temporarily replace the checkout screen (the
+  // cart stays put underneath, so nobody loses what they'd picked).
+  const [panel, setPanel] = useState<Panel>(null);
+
+  // The PIN step: there's no "who's this?" picker anywhere. Tapping "Log
+  // checkout" opens this pad, and whoever's PIN gets entered is who the log
+  // is assigned to (server-side lookup — see logKioskCheckout).
+  const [pinOpen, setPinOpen] = useState(false);
   const [pinValue, setPinValue] = useState("");
-  const [pinDraft, setPinDraft] = useState("");
   const [pinError, setPinError] = useState<string | null>(null);
   const [pinPending, setPinPending] = useState(false);
-  const [confirmedPin, setConfirmedPin] = useState<string | null>(null);
 
-  // A MANAGER/ADMIN employee can clear a coworker's forgotten PIN right
-  // here — approveKioskPinReset — instead of someone needing the desktop
-  // app. Entirely separate identity/PIN state from the target employee's
-  // own, since it's a different person entering a different PIN.
-  const [forgotOpen, setForgotOpen] = useState(false);
-  const [approverId, setApproverId] = useState<string | null>(null);
-  const [approverPinValue, setApproverPinValue] = useState("");
-  const [approverPinError, setApproverPinError] = useState<string | null>(null);
-  const [approverPending, setApproverPending] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   // Remembered per-device — a kiosk tablet lives at one site, so staff
   // shouldn't have to repick it before every checkout.
@@ -102,124 +88,51 @@ export default function KioskCheckout({
     }
   }
 
-  // Reset for the next person the moment a checkout logs successfully —
-  // this tablet is shared, so nothing should carry over between checkouts.
-  useEffect(() => {
-    if (state?.success) {
-      setCart([]);
-      setEmployeeId(null);
-      setQuery("");
-      setConfirmedPin(null);
-      setPinPhase(null);
-      setPinValue("");
-      setPinDraft("");
-      setPinError(null);
-      closeForgotFlow();
-    }
-  }, [state]);
-
-  function closeForgotFlow() {
-    setForgotOpen(false);
-    setApproverId(null);
-    setApproverPinValue("");
-    setApproverPinError(null);
-  }
-
-  function openSignup() {
-    selectEmployee("");
-    setSignupOpen(true);
-  }
-
-  function handleSignedUp(employee: { id: string; name: string }, pin: string) {
-    setAddedEmployees((prev) => [...prev, { id: employee.id, name: employee.name, hasPin: true }]);
-    setSignupOpen(false);
-    // They just chose this PIN and the server stored it — straight to checkout.
-    setEmployeeId(employee.id);
-    setConfirmedPin(pin);
-    setPinPhase(null);
+  function closePin() {
+    setPinOpen(false);
     setPinValue("");
-    setPinDraft("");
     setPinError(null);
   }
 
-  function selectEmployee(id: string) {
-    if (id === NEW_USER) {
-      openSignup();
-      return;
-    }
-    setEmployeeId(id || null);
-    setConfirmedPin(null);
-    setPinValue("");
-    setPinDraft("");
-    setPinError(null);
-    closeForgotFlow();
-    const employee = employees.find((e) => e.id === id);
-    setPinPhase(id ? (employee?.hasPin ? "verify" : "create-step1") : null);
+  function openPanel(next: Panel) {
+    closePin();
+    setNotice(null);
+    setPanel(next);
   }
 
-  async function submitApproverPin(pin: string) {
-    if (!employeeId || !approverId) return;
-    setApproverPending(true);
-    const result = await approveKioskPinReset(employeeId, approverId, pin);
-    setApproverPending(false);
-    if (result.ok) {
-      closeForgotFlow();
-      setPinPhase("create-step1");
-      setPinValue("");
-      setPinDraft("");
-      setPinError(null);
-    } else {
-      setApproverPinError(result.error);
-      setApproverPinValue("");
-    }
-  }
-
-  function handleApproverPinChange(next: string) {
-    setApproverPinError(null);
-    setApproverPinValue(next);
-    if (next.length === 4) void submitApproverPin(next);
-  }
-
-  async function confirmPin(pin: string) {
-    if (!employeeId) return;
+  async function submitPin(pin: string) {
+    if (!siteId) return;
     setPinPending(true);
-    const result = await confirmKioskPin(employeeId, pin);
+    const result = await logKioskCheckout({
+      siteId,
+      isReturn,
+      lines: cart.map((l) => ({ itemId: l.itemId, quantity: l.quantity })),
+      pin,
+    });
     setPinPending(false);
-    if (result.ok) {
-      setConfirmedPin(pin);
-      setPinPhase(null);
-      setPinValue("");
-    } else {
+
+    if (!result.ok) {
       setPinError(result.error);
       setPinValue("");
-      if (pinPhase === "create-step2") {
-        setPinPhase("create-step1");
-        setPinDraft("");
-      }
+      return;
     }
+
+    // Reset for the next person the moment a checkout logs — this tablet is
+    // shared, so nothing should carry over.
+    setCart([]);
+    setQuery("");
+    closePin();
+    setNotice(
+      `${isReturn ? "Returned" : "Logged"} ${result.itemCount} item${
+        result.itemCount === 1 ? "" : "s"
+      } for ${result.employeeName}.`
+    );
   }
 
   function handlePinChange(next: string) {
     setPinError(null);
     setPinValue(next);
-    if (next.length < 4) return;
-
-    if (pinPhase === "verify") {
-      void confirmPin(next);
-    } else if (pinPhase === "create-step1") {
-      setPinDraft(next);
-      setPinPhase("create-step2");
-      setPinValue("");
-    } else if (pinPhase === "create-step2") {
-      if (next === pinDraft) {
-        void confirmPin(next);
-      } else {
-        setPinError("PINs didn't match — try again.");
-        setPinPhase("create-step1");
-        setPinDraft("");
-        setPinValue("");
-      }
-    }
+    if (next.length === 4) void submitPin(next);
   }
 
   const results = useMemo(() => {
@@ -231,6 +144,7 @@ export default function KioskCheckout({
   }, [query, items]);
 
   function addItem(item: Item) {
+    setNotice(null);
     setCart((prev) => {
       const existing = prev.find((l) => l.itemId === item.id);
       if (existing) {
@@ -306,10 +220,8 @@ export default function KioskCheckout({
   }
 
   const site = sites.find((s) => s.id === siteId);
-  const selectedEmployee = employees.find((e) => e.id === employeeId);
-  const identityConfirmed = !!employeeId && !!confirmedPin;
-  const canSubmit = identityConfirmed && cart.length > 0 && !pending;
   const totalUnits = cart.reduce((sum, l) => sum + l.quantity, 0);
+  const actionLabel = isReturn ? "return" : "checkout";
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
@@ -347,161 +259,67 @@ export default function KioskCheckout({
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 pb-48">
-        {!identityConfirmed && !signupOpen && (
-          <div className="mb-4 flex justify-center">
-            <button
-              type="button"
-              onClick={openSignup}
-              className="kiosk-bubble relative rounded-full bg-[#134229] px-5 py-2.5 text-base font-bold text-white shadow-lg ring-4 ring-[#d4edd6] active:scale-95"
-            >
-              <span aria-hidden className="mr-1.5">🫧</span>
-              Need a Pin? Click Here
-              <span
-                aria-hidden
-                className="absolute -bottom-1.5 left-8 h-3.5 w-3.5 rotate-45 bg-[#134229]"
-              />
-            </button>
-          </div>
-        )}
-
-        {signupOpen && (
+        {panel === "signup" && (
           <NewKioskUser
             siteId={siteId}
             siteName={site?.name}
-            onCreated={handleSignedUp}
-            onCancel={() => setSignupOpen(false)}
+            onCreated={(employee) => {
+              setAddedPeople((prev) => [...prev, { ...employee, hasPin: true }]);
+              setPanel(null);
+              setNotice(
+                `You're all set, ${employee.name.split(" ")[0]}! Add your items, then tap Log ${actionLabel} and enter your PIN.`
+              );
+              router.refresh();
+            }}
+            onCancel={() => setPanel(null)}
           />
         )}
 
-        <div
-          className={`mb-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm ${
-            signupOpen ? "hidden" : ""
-          }`}
-        >
-          <label
-            htmlFor="kiosk-employee"
-            className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-gray-700"
-          >
-            <UserIcon className="h-4 w-4 text-gray-400" />
-            Who&apos;s this?
-          </label>
-          <div className="relative">
-            <select
-              id="kiosk-employee"
-              value={employeeId ?? ""}
-              onChange={(e) => selectEmployee(e.target.value)}
-              className="w-full appearance-none rounded-xl border border-gray-300 bg-white py-3 pl-4 pr-10 text-lg text-gray-900"
-            >
-              <option value="" disabled>
-                Select your name…
-              </option>
-              <option value={NEW_USER}>＋ Create new kiosk user</option>
-              {employees.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.name}
-                </option>
-              ))}
-            </select>
-            <ChevronDownIcon className="pointer-events-none absolute right-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
-          </div>
-        </div>
+        {panel === "recovery" && (
+          <PinRecovery
+            people={people}
+            onDone={(name) => {
+              setPanel(null);
+              setNotice(
+                `New PIN saved for ${name}. Add your items, then tap Log ${actionLabel} and enter it.`
+              );
+              router.refresh();
+            }}
+            onCancel={() => setPanel(null)}
+          />
+        )}
 
-        {pinPhase && employeeId && !forgotOpen && (
-          <div className="mb-4">
-            <PinPad
-              title={
-                pinPhase === "verify"
-                  ? `Enter PIN for ${selectedEmployee?.name}`
-                  : pinPhase === "create-step1"
-                    ? `Create a PIN for ${selectedEmployee?.name}`
-                    : "Confirm your PIN"
-              }
-              subtitle={
-                pinPhase === "create-step1"
-                  ? "You'll use this 4-digit PIN each time you check out items."
-                  : undefined
-              }
-              value={pinValue}
-              error={pinError}
-              disabled={pinPending}
-              onChange={handlePinChange}
-            />
-            {pinPhase === "verify" && (
+        {panel === null && (
+          <>
+            <div className="mb-4 flex flex-col items-center gap-2">
               <button
                 type="button"
-                onClick={() => setForgotOpen(true)}
-                className="mt-3 block w-full text-center text-sm text-gray-500 hover:text-gray-800 hover:underline"
+                onClick={() => openPanel("signup")}
+                className="kiosk-bubble relative rounded-full bg-[#134229] px-5 py-2.5 text-base font-bold text-white shadow-lg ring-4 ring-[#d4edd6] active:scale-95"
               >
-                Forgot your PIN? Ask a manager
+                <span aria-hidden className="mr-1.5">🫧</span>
+                Need a Pin? Click Here
+                <span
+                  aria-hidden
+                  className="absolute -bottom-1.5 left-8 h-3.5 w-3.5 rotate-45 bg-[#134229]"
+                />
               </button>
-            )}
-          </div>
-        )}
-
-        {forgotOpen && employeeId && (
-          <div className="mb-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-            <p className="text-center text-base font-medium text-gray-900">
-              Reset PIN for {selectedEmployee?.name}
-            </p>
-            <p className="mt-0.5 text-center text-sm text-gray-500">
-              A manager or admin enters their own PIN to approve this.
-            </p>
-
-            <div className="relative mt-4">
-              <select
-                value={approverId ?? ""}
-                onChange={(e) => {
-                  setApproverId(e.target.value || null);
-                  setApproverPinValue("");
-                  setApproverPinError(null);
-                }}
-                className="w-full appearance-none rounded-xl border border-gray-300 bg-white py-3 pl-4 pr-10 text-lg text-gray-900"
+              <button
+                type="button"
+                onClick={() => openPanel("recovery")}
+                className="text-sm text-gray-500 hover:text-gray-800 hover:underline"
               >
-                <option value="" disabled>
-                  Which manager is approving this?
-                </option>
-                {employees
-                  .filter((e) => e.id !== employeeId)
-                  .map((e) => (
-                    <option key={e.id} value={e.id}>
-                      {e.name}
-                    </option>
-                  ))}
-              </select>
-              <ChevronDownIcon className="pointer-events-none absolute right-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+                Forgot your PIN?
+              </button>
             </div>
 
-            {approverId && (
-              <div className="mt-4">
-                <PinPad
-                  title={`Enter PIN for ${employees.find((e) => e.id === approverId)?.name}`}
-                  value={approverPinValue}
-                  error={approverPinError}
-                  disabled={approverPending}
-                  onChange={handleApproverPinChange}
-                />
-              </div>
+            {notice && (
+              <p className="mb-4 flex items-center gap-2 rounded-lg bg-[#eef6f0] px-4 py-3 text-sm text-[#134229]">
+                <CheckCircleIcon className="h-4 w-4 shrink-0" />
+                {notice}
+              </p>
             )}
 
-            <button
-              type="button"
-              onClick={closeForgotFlow}
-              className="mt-3 block w-full text-center text-sm text-gray-500 hover:text-gray-800 hover:underline"
-            >
-              Cancel
-            </button>
-          </div>
-        )}
-
-        {!employeeId && !signupOpen && (
-          <div className="flex flex-col items-center gap-2 py-10 text-gray-400">
-            <UserIcon className="h-8 w-8" />
-            <p>Pick who this is to get started.</p>
-          </div>
-        )}
-
-        {identityConfirmed && (
-          <>
             <div className="relative mb-4">
               <SearchIcon className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
               <input
@@ -580,57 +398,61 @@ export default function KioskCheckout({
             </div>
           </>
         )}
-
-        {state?.error && (
-          <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
-            {state.error}
-          </p>
-        )}
-        {state?.success && (
-          <p className="mt-4 flex items-center gap-2 rounded-lg bg-[#eef6f0] px-4 py-3 text-sm text-[#134229]">
-            <CheckCircleIcon className="h-4 w-4 shrink-0" />
-            Logged {state.itemCount} item{state.itemCount === 1 ? "" : "s"}.
-          </p>
-        )}
       </div>
 
-      <form
-        action={formAction}
-        className={`fixed bottom-0 left-0 right-0 border-t border-gray-200 bg-white p-4 ${
-          signupOpen ? "hidden" : ""
-        }`}
-      >
-        <input type="hidden" name="siteId" value={siteId} />
-        <input type="hidden" name="employeeId" value={employeeId ?? ""} />
-        <input type="hidden" name="pin" value={confirmedPin ?? ""} />
-        <input type="hidden" name="isReturn" value={String(isReturn)} />
-        {cart.map((line) => (
-          <span key={line.itemId}>
-            <input type="hidden" name="itemId" value={line.itemId} />
-            <input type="hidden" name="quantity" value={line.quantity} />
-          </span>
-        ))}
-        {!canSubmit && !pending && (
-          <p className="mb-2 text-center text-xs text-gray-400">
-            {!employeeId
-              ? "Pick who this is for."
-              : !confirmedPin
-                ? "Confirm your PIN above."
-                : "Add at least one item."}
-          </p>
-        )}
-        <button
-          type="submit"
-          disabled={!canSubmit}
-          className="w-full rounded-xl border border-black bg-black py-4 text-lg font-semibold text-white transition-colors hover:bg-white hover:text-black disabled:border-gray-300 disabled:bg-gray-200 disabled:text-gray-400"
-        >
-          {pending
-            ? "Logging…"
-            : isReturn
-              ? `Log return (${cart.length})`
-              : `Log checkout (${cart.length})`}
-        </button>
-      </form>
+      {panel === null && (
+        <div className="fixed bottom-0 left-0 right-0 border-t border-gray-200 bg-white p-4">
+          {cart.length === 0 && (
+            <p className="mb-2 text-center text-xs text-gray-400">Add at least one item.</p>
+          )}
+          <button
+            type="button"
+            disabled={cart.length === 0}
+            onClick={() => {
+              setNotice(null);
+              setPinOpen(true);
+            }}
+            className="w-full rounded-xl border border-black bg-black py-4 text-lg font-semibold text-white transition-colors hover:bg-white hover:text-black disabled:border-gray-300 disabled:bg-gray-200 disabled:text-gray-400"
+          >
+            {isReturn ? `Log return (${cart.length})` : `Log checkout (${cart.length})`}
+          </button>
+        </div>
+      )}
+
+      {pinOpen && (
+        <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/50 p-4 sm:items-center">
+          <div className="w-full max-w-sm">
+            <PinPad
+              title="Enter your PIN"
+              subtitle={`To log this ${actionLabel} — ${cart.length} item${
+                cart.length === 1 ? "" : "s"
+              } · ${totalUnits} unit${totalUnits === 1 ? "" : "s"}`}
+              value={pinValue}
+              error={pinError}
+              disabled={pinPending}
+              onChange={handlePinChange}
+            />
+            <div className="mt-3 flex items-center justify-center gap-6 text-sm">
+              <button
+                type="button"
+                onClick={closePin}
+                disabled={pinPending}
+                className="rounded-full bg-white/90 px-4 py-1.5 text-gray-700 hover:bg-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => openPanel("recovery")}
+                disabled={pinPending}
+                className="rounded-full bg-white/90 px-4 py-1.5 text-gray-700 hover:bg-white"
+              >
+                Forgot your PIN?
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

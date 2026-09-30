@@ -10,10 +10,12 @@ export default async function KioskPage() {
       orderBy: { name: "asc" },
       select: { id: true, name: true },
     }),
+    // Names only feed "Forgot your PIN?" — the checkout itself identifies
+    // people by PIN, not from a list.
     db.employee.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
-      select: { id: true, name: true, pinHash: true },
+      select: { id: true, name: true, pinDigest: true },
     }),
     db.item.findMany({
       where: { isActive: true },
@@ -22,12 +24,12 @@ export default async function KioskPage() {
     }),
   ]);
 
-  // Never send the hash itself to the client — just whether one exists.
-  const employeesWithPinFlag = employees.map(({ id, name, pinHash }) => ({
+  // Never send the digest itself to the client — just whether one exists.
+  const people = employees.map(({ id, name, pinDigest }) => ({
     id,
     name,
-    hasPin: pinHash != null,
+    hasPin: pinDigest != null,
   }));
 
-  return <KioskCheckout sites={sites} employees={employeesWithPinFlag} items={items} />;
+  return <KioskCheckout sites={sites} people={people} items={items} />;
 }

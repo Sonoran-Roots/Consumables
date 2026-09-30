@@ -2,15 +2,12 @@
 
 import { useState } from "react";
 import { createKioskUser } from "../checkouts/actions";
-import PinPad from "./pin-pad";
+import PinCreate from "./pin-create";
 
-type Step = "name" | "pin1" | "pin2";
-
-// New-employee self-signup at the kiosk: name, then a PIN entered twice.
-// Owns its own step state so the main kiosk screen only has to know "open"
-// and "done" — onCreated hands back the new employee plus the PIN they just
-// set, which the kiosk treats as already-confirmed identity (they literally
-// just proved it).
+// New-person self-signup at the kiosk: name, then a PIN entered twice. The
+// PIN must be unique across everyone (it's how the kiosk knows who's who), so
+// the server may bounce it. onCreated hands back the new employee; they don't
+// need to identify themselves again until they actually log a checkout.
 export default function NewKioskUser({
   siteId,
   siteName,
@@ -19,15 +16,12 @@ export default function NewKioskUser({
 }: {
   siteId: string | null;
   siteName?: string;
-  onCreated: (employee: { id: string; name: string }, pin: string) => void;
+  onCreated: (employee: { id: string; name: string }) => void;
   onCancel: () => void;
 }) {
-  const [step, setStep] = useState<Step>("name");
+  const [step, setStep] = useState<"name" | "pin">("name");
   const [name, setName] = useState("");
-  const [draft, setDraft] = useState("");
-  const [pinValue, setPinValue] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
 
   function submitName(e: React.FormEvent) {
     e.preventDefault();
@@ -36,43 +30,23 @@ export default function NewKioskUser({
       return;
     }
     setError(null);
-    setStep("pin1");
+    setStep("pin");
   }
 
-  async function finish(pin: string) {
-    setPending(true);
+  async function createUser(pin: string): Promise<string | null> {
     const result = await createKioskUser(name, pin, siteId);
-    setPending(false);
     if (result.ok) {
-      onCreated(result.employee, pin);
-      return;
+      onCreated(result.employee);
+      return null;
     }
-    setError(result.error);
-    setPinValue("");
-    setDraft("");
-    // A name problem needs the name field back; anything else, retry the PIN.
-    setStep(/name|list/i.test(result.error) ? "name" : "pin1");
-  }
-
-  function handlePinChange(next: string) {
-    setError(null);
-    setPinValue(next);
-    if (next.length < 4) return;
-
-    if (step === "pin1") {
-      setDraft(next);
-      setPinValue("");
-      setStep("pin2");
-    } else if (step === "pin2") {
-      if (next === draft) {
-        void finish(next);
-      } else {
-        setError("PINs didn't match — try again.");
-        setDraft("");
-        setPinValue("");
-        setStep("pin1");
-      }
+    // A name problem needs the name field back; a PIN problem (taken) stays
+    // on the PIN pad so they can try another.
+    if (/name|list/i.test(result.error)) {
+      setError(result.error);
+      setStep("name");
+      return null;
     }
+    return result.error;
   }
 
   return (
@@ -109,22 +83,12 @@ export default function NewKioskUser({
           </button>
         </form>
       ) : (
-        <PinPad
-          title={step === "pin1" ? `Pick a 4-digit PIN, ${name.trim().split(" ")[0]}` : "Type it once more to confirm"}
-          subtitle={
-            step === "pin1" ? "You'll use this PIN every time you check out items." : undefined
-          }
-          value={pinValue}
-          error={error}
-          disabled={pending}
-          onChange={handlePinChange}
-        />
+        <PinCreate firstName={name.trim().split(" ")[0]} onSubmit={createUser} />
       )}
 
       <button
         type="button"
         onClick={onCancel}
-        disabled={pending}
         className="block w-full text-center text-sm text-gray-500 hover:text-gray-800 hover:underline"
       >
         Cancel

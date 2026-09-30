@@ -11,14 +11,14 @@ export default async function EditEmployeePage({
   const { id } = await params;
 
   const [employee, sites] = await Promise.all([
-    // omit the PIN hash — no reason to ship even a salted hash to the client
-    db.employee.findUnique({ where: { id }, omit: { pinHash: true } }),
+    // omit the PIN digest — no reason to ship it to the client
+    db.employee.findUnique({ where: { id }, omit: { pinDigest: true } }),
     db.site.findMany({ orderBy: { name: "asc" } }),
   ]);
 
   if (!employee) notFound();
 
-  const hasPin = (await db.employee.count({ where: { id, pinHash: { not: null } } })) > 0;
+  const hasPin = (await db.employee.count({ where: { id, pinDigest: { not: null } } })) > 0;
 
   return (
     <div className="max-w-md">

@@ -155,7 +155,7 @@ export default function Sidebar() {
   return (
     <nav
       className={`flex h-screen shrink-0 flex-col border-r border-gray-200 bg-white transition-[width] duration-150 ${
-        collapsed ? "w-16" : "w-64"
+        collapsed ? "w-16" : "w-72"
       }`}
     >
       <div className="flex h-16 shrink-0 items-center gap-2 bg-black px-3">
@@ -175,12 +175,12 @@ export default function Sidebar() {
             </Link>
             <span className="min-w-0 flex-1 leading-tight">
               <span
-                className="block truncate text-sm font-black tracking-tight text-white"
+                className="block truncate whitespace-nowrap text-[13px] font-black tracking-tight text-white"
                 title="JARS Cannabis Arizona"
               >
                 JARS Cannabis Arizona
               </span>
-              <span className="block truncate text-[10px] font-semibold tracking-[0.15em] text-white/60">
+              <span className="block truncate text-[9px] font-semibold tracking-[0.1em] text-white/60">
                 CONSUMABLE MANAGEMENT
               </span>
             </span>
