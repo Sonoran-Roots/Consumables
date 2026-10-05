@@ -6,7 +6,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { StaffRole } from "@prisma/client";
-import { roleAtLeast } from "@/lib/access";
+import { isAuditRole, roleAtLeast } from "@/lib/access";
 
 async function requireAdmin() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -154,6 +154,26 @@ export async function updateUserAccess(
   }
 
   await db.user.update({ where: { id: userId }, data: { role, isPurchasingTeam } });
+  revalidatePath("/employees");
+  return { ok: true };
+}
+
+// Access to the Inventory Audit module — separate from the Consumable
+// Management access above. null removes it.
+export async function updateAuditAccess(
+  userId: string,
+  auditRole: string | null
+): Promise<AppAccessResult> {
+  try {
+    await requireAdmin();
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+  if (auditRole !== null && !isAuditRole(auditRole)) {
+    return { ok: false, error: "Unknown audit access level." };
+  }
+
+  await db.user.update({ where: { id: userId }, data: { auditRole } });
   revalidatePath("/employees");
   return { ok: true };
 }

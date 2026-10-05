@@ -16,7 +16,9 @@ export default async function EmployeesPage() {
       orderBy: { name: "asc" },
       include: {
         site: true,
-        user: { select: { id: true, email: true, role: true, isPurchasingTeam: true } },
+        user: {
+          select: { id: true, email: true, role: true, isPurchasingTeam: true, auditRole: true },
+        },
       },
     }),
     // Accounts with no linked employee — the shared, location-signed-in
@@ -36,8 +38,8 @@ export default async function EmployeesPage() {
         <div className="min-w-0">
           <h1 className="text-xl font-semibold text-gray-900">Employees</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Real accountability for checkouts and transfers, and — for the purchasing team —
-            who can reach the desktop app at all.
+            Real accountability for checkouts and transfers, and who can open which module:
+            Consumable Management and Inventory Audit each have their own access level.
           </p>
         </div>
         <Link
@@ -54,7 +56,7 @@ export default async function EmployeesPage() {
             <tr>
               <th className="px-4 py-2 text-left font-medium text-gray-500">Name</th>
               <th className="px-4 py-2 text-left font-medium text-gray-500">Home site</th>
-              <th className="px-4 py-2 text-left font-medium text-gray-500">Desktop app access</th>
+              <th className="px-4 py-2 text-left font-medium text-gray-500">Module access</th>
               <th className="px-4 py-2 text-left font-medium text-gray-500"></th>
             </tr>
           </thead>

@@ -6,18 +6,21 @@ import {
   createAppAccessForEmployee,
   linkExistingAccount,
   unlinkAppAccess,
+  updateAuditAccess,
   updateUserAccess,
 } from "./actions";
-import type { StaffRole } from "@/lib/access";
+import { AUDIT_ROLES, type StaffRole } from "@/lib/access";
 
 type LinkedUser = {
   id: string;
   email: string;
   role: string;
   isPurchasingTeam: boolean;
+  auditRole: string | null;
 } | null;
 
 const ROLES: StaffRole[] = ["USER", "MANAGER", "ADMIN"];
+const titleCase = (s: string) => s.charAt(0) + s.slice(1).toLowerCase();
 
 export default function EmployeeAccessCell({
   employeeId,
@@ -33,10 +36,11 @@ export default function EmployeeAccessCell({
   const [mode, setMode] = useState<"idle" | "create" | "link">("idle");
 
   if (!isAdmin) {
+    const parts: string[] = [];
+    if (user?.isPurchasingTeam) parts.push(`Consumables (${titleCase(user.role)})`);
+    if (user?.auditRole) parts.push(`Audit (${titleCase(user.auditRole)})`);
     return (
-      <span className="text-sm text-gray-500">
-        {user ? `App access (${user.role.charAt(0) + user.role.slice(1).toLowerCase()})` : "Kiosk only"}
-      </span>
+      <span className="text-sm text-gray-500">{parts.length ? parts.join(" · ") : "Kiosk only"}</span>
     );
   }
 
@@ -233,24 +237,31 @@ function ExistingAccessRow({
   user,
 }: {
   employeeId: string;
-  user: { id: string; email: string; role: string; isPurchasingTeam: boolean };
+  user: { id: string; email: string; role: string; isPurchasingTeam: boolean; auditRole: string | null };
 }) {
   const [role, setRole] = useState<StaffRole>(user.role as StaffRole);
   const [isPurchasingTeam, setIsPurchasingTeam] = useState(user.isPurchasingTeam);
+  const [auditRole, setAuditRole] = useState<string>(user.auditRole ?? "");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
-  const dirty = role !== user.role || isPurchasingTeam !== user.isPurchasingTeam;
+  const consumablesDirty = role !== user.role || isPurchasingTeam !== user.isPurchasingTeam;
+  const auditDirty = auditRole !== (user.auditRole ?? "");
+  const dirty = consumablesDirty || auditDirty;
 
   async function handleSave() {
     setSaving(true);
     setError(null);
-    const result = await updateUserAccess(user.id, role, isPurchasingTeam);
+    // Two modules, two independent settings — save only what changed.
+    const results = [];
+    if (consumablesDirty) results.push(await updateUserAccess(user.id, role, isPurchasingTeam));
+    if (auditDirty) results.push(await updateAuditAccess(user.id, auditRole || null));
     setSaving(false);
-    if (!result.ok) {
-      setError(result.error);
+    const failed = results.find((r) => !r.ok);
+    if (failed && !failed.ok) {
+      setError(failed.error);
       return;
     }
     setSaved(true);
@@ -275,20 +286,37 @@ function ExistingAccessRow({
           onChange={(e) => setIsPurchasingTeam(e.target.checked)}
           className="rounded border-gray-300"
         />
-        Purchasing team
+        Consumables
       </label>
       <select
         value={role}
         disabled={!isPurchasingTeam}
         onChange={(e) => setRole(e.target.value as StaffRole)}
         className="rounded-md border border-gray-300 px-1.5 py-0.5 text-xs disabled:opacity-40"
+        aria-label="Consumables access level"
       >
         {ROLES.map((r) => (
           <option key={r} value={r}>
-            {r.charAt(0) + r.slice(1).toLowerCase()}
+            {titleCase(r)}
           </option>
         ))}
       </select>
+      <label className="flex items-center gap-1 text-xs text-gray-700">
+        Audit
+        <select
+          value={auditRole}
+          onChange={(e) => setAuditRole(e.target.value)}
+          className="rounded-md border border-gray-300 px-1.5 py-0.5 text-xs"
+          aria-label="Inventory Audit access level"
+        >
+          <option value="">No access</option>
+          {AUDIT_ROLES.map((r) => (
+            <option key={r} value={r}>
+              {titleCase(r)}
+            </option>
+          ))}
+        </select>
+      </label>
       {error && <span className="text-xs text-red-700">{error}</span>}
       {saved && <span className="text-xs text-[#134229]">Saved</span>}
       <button

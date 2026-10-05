@@ -4,7 +4,7 @@ import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "@/lib/auth-client";
-import { minRoleFor, roleAtLeast } from "@/lib/access";
+import { minRoleFor, modulesFor, roleAtLeast } from "@/lib/access";
 import {
   ChevronLeftIcon,
   ChevronDownIcon,
@@ -274,6 +274,16 @@ export default function Sidebar() {
 
       {session?.user && (
         <div className="shrink-0 border-t border-gray-200 p-2">
+          {modulesFor(session.user as { isPurchasingTeam?: boolean; auditRole?: string | null }).length > 1 && (
+            <Link
+              href="/modules"
+              title="Switch module"
+              className="mb-1 flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-gray-600 hover:bg-gray-100"
+            >
+              <SwapIcon className="h-4 w-4 shrink-0" />
+              {!collapsed && <span>Switch module</span>}
+            </Link>
+          )}
           <div className="flex items-center gap-2 rounded-md px-2 py-1.5">
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#e5f3e5] text-xs font-semibold text-[#0e3020]">
               {session.user.name?.[0]?.toUpperCase() ?? session.user.email[0].toUpperCase()}

@@ -36,3 +36,90 @@ export function minRoleFor(pathname: string): StaffRole {
   ).sort((a, b) => b.prefix.length - a.prefix.length)[0];
   return match?.role ?? "USER";
 }
+
+// ---------------------------------------------------------------------------
+// Modules. The app is two separate modules that share only logins and the
+// admin console (Employees page):
+//   - Consumable Management: everything at the root (/inventory, /items, ...).
+//     Access = User.isPurchasingTeam, at level User.role (StaffRole above).
+//   - Inventory Audit: everything under /inventory-audit.
+//     Access = User.auditRole (null means no access).
+// Kiosk tablets are neither: they only ever reach /kiosk.
+// ---------------------------------------------------------------------------
+
+export type AuditRole = "AUDITOR" | "MANAGER" | "ADMIN";
+export const AUDIT_ROLES: AuditRole[] = ["AUDITOR", "MANAGER", "ADMIN"];
+
+// /inventory-audit, not /audit: the consumables side already has /audits, and
+// prefix checks would otherwise confuse the two.
+export const AUDIT_PREFIX = "/inventory-audit";
+
+export type ModuleKey = "CONSUMABLES" | "AUDIT";
+
+export function isAuditRole(value: unknown): value is AuditRole {
+  return typeof value === "string" && (AUDIT_ROLES as string[]).includes(value);
+}
+
+export function isAuditPath(pathname: string): boolean {
+  return pathname === AUDIT_PREFIX || pathname.startsWith(`${AUDIT_PREFIX}/`);
+}
+
+export function modulesFor(user: {
+  isPurchasingTeam?: boolean | null;
+  auditRole?: string | null;
+}): ModuleKey[] {
+  const modules: ModuleKey[] = [];
+  if (user.isPurchasingTeam) modules.push("CONSUMABLES");
+  if (isAuditRole(user.auditRole)) modules.push("AUDIT");
+  return modules;
+}
+
+export const MODULE_HOME: Record<ModuleKey, string> = {
+  CONSUMABLES: "/",
+  AUDIT: AUDIT_PREFIX,
+};
+
+export type AccessDecision = { allow: true } | { allow: false; to: string; denied?: boolean };
+
+// The proxy's whole routing rule, kept pure so it can be tested exhaustively:
+// which module a path belongs to, whether this user has that module, and
+// whether their level reaches this route. (The proxy handles /kiosk and the
+// signed-out case before it gets here.)
+export function decideAccess(
+  pathname: string,
+  user: { role?: string | null; isPurchasingTeam?: boolean | null; auditRole?: string | null }
+): AccessDecision {
+  const hasConsumables = user.isPurchasingTeam === true;
+  const auditRole = isAuditRole(user.auditRole) ? user.auditRole : null;
+
+  // A login with no module can only use the kiosk.
+  if (!hasConsumables && !auditRole) return { allow: false, to: "/kiosk" };
+
+  if (pathname === "/modules") return { allow: true };
+
+  if (isAuditPath(pathname)) {
+    if (!auditRole) return { allow: false, to: "/", denied: true };
+    if (!auditRolesAllowedFor(pathname).includes(auditRole)) {
+      return { allow: false, to: AUDIT_PREFIX, denied: true };
+    }
+    return { allow: true };
+  }
+
+  // Consumable Management. An audit-only user never lands on its pages.
+  if (!hasConsumables) return { allow: false, to: AUDIT_PREFIX };
+  if (!roleAtLeast(user.role, minRoleFor(pathname))) return { allow: false, to: "/", denied: true };
+  return { allow: true };
+}
+
+// Audit roles are capabilities, not a ladder (a manager follows up on
+// findings but doesn't enter them; an auditor enters them but isn't someone
+// findings get routed to), so each route lists exactly which roles may open
+// it. Longest matching prefix wins; anything unlisted is open to all three.
+const AUDIT_ROUTE_ROLES: { prefix: string; roles: AuditRole[] }[] = [];
+
+export function auditRolesAllowedFor(pathname: string): AuditRole[] {
+  const match = AUDIT_ROUTE_ROLES.filter(
+    (r) => pathname === r.prefix || pathname.startsWith(`${r.prefix}/`)
+  ).sort((a, b) => b.prefix.length - a.prefix.length)[0];
+  return match?.roles ?? AUDIT_ROLES;
+}

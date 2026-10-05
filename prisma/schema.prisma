@@ -572,6 +572,16 @@ model VendorCredit {
 // Shared by Employee.role (kiosk PIN-reset authority) and User.role (desktop
 // app permissions) — two separate concerns on two separate models, but the
 // same three tiers, so one enum instead of duplicating it.
+// Access level within the Inventory Audit module. Not a ladder — each level
+// has its own capabilities (see src/lib/access.ts): AUDITOR is the inventory
+// team (enters and uploads findings), MANAGER follows up on findings for
+// their locations/departments, ADMIN does both and configures the module.
+enum AuditRole {
+  AUDITOR
+  MANAGER
+  ADMIN
+}
+
 enum StaffRole {
   USER
   MANAGER
@@ -594,6 +604,11 @@ model User {
   // role only matters once isPurchasingTeam is true.
   role             StaffRole @default(USER)
   isPurchasingTeam Boolean   @default(false)
+  // Access to the separate Inventory Audit module (/inventory-audit). Null =
+  // no access. Independent of role/isPurchasingTeam above, which are this
+  // user's access to the Consumable Management module. Also carried in the
+  // session cookie so the proxy can gate /inventory-audit without a DB call.
+  auditRole        AuditRole?
 
   sessions Session[]
   accounts Account[]

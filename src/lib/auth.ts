@@ -31,6 +31,8 @@ export const auth = betterAuth({
       // StaffRole/User comments for what these actually gate.
       role: { type: "string", defaultValue: "USER", input: false, required: false },
       isPurchasingTeam: { type: "boolean", defaultValue: false, input: false, required: false },
+      // Inventory Audit module access (null = none). Same rule: admin-set only.
+      auditRole: { type: "string", input: false, required: false },
     },
   },
   session: {

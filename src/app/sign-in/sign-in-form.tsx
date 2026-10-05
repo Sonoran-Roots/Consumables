@@ -22,7 +22,10 @@ export default function SignInForm() {
       setError(signInError.message ?? "Couldn't sign in — check your email and password.");
       return;
     }
-    router.push(searchParams.get("redirect") || "/");
+    // A deep link (e.g. /transfers) goes straight there; otherwise — including
+    // the plain "/" the proxy records for a bare visit — show the module chooser.
+    const redirect = searchParams.get("redirect");
+    router.push(redirect && redirect !== "/" ? redirect : "/modules");
     router.refresh();
   }
 
