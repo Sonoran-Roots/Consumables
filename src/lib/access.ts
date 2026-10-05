@@ -15,7 +15,8 @@ export function roleAtLeast(role: string | null | undefined, minimum: StaffRole)
 // Transfers, Checkouts, Audits, Reconciliation are all USER-tier).
 const ROUTE_MIN_ROLE: { prefix: string; role: StaffRole }[] = [
   { prefix: "/reconciliation/finance-report", role: "ADMIN" },
-  { prefix: "/import", role: "MANAGER" },
+  { prefix: "/bulk-import", role: "ADMIN" },
+  { prefix: "/import", role: "ADMIN" }, // old URL; redirects to /bulk-import/inventory
   { prefix: "/purchasing", role: "MANAGER" },
   { prefix: "/vendors", role: "MANAGER" },
   { prefix: "/employees/", role: "ADMIN" },

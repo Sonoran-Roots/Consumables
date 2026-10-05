@@ -35,7 +35,6 @@ const GROUPS: Group[] = [
     children: [
       { href: "/inventory", label: "Current inventory" },
       { href: "/items", label: "Items" },
-      { href: "/import", label: "Import" },
     ],
   },
   {
@@ -67,6 +66,7 @@ const GROUPS: Group[] = [
       { href: "/employees", label: "Employees" },
       { href: "/categories", label: "Categories" },
       { href: "/units", label: "Units of measure" },
+      { href: "/bulk-import", label: "Bulk import" },
     ],
   },
 ];
