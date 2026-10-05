@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { MaterialType } from "@prisma/client";
+import { skuGenerator } from "@/lib/sku";
 
 export type CreateItemState = { error?: string } | null;
 
@@ -25,25 +26,37 @@ export async function createItem(
     return { error: "Name, category, and unit of measure are required." };
   }
 
-  try {
-    await db.item.create({
-      data: {
-        name,
-        categoryId,
-        defaultUomId,
-        materialType,
-        brand,
-        genericName,
-        variant,
-        size,
-        sku,
-      },
-    });
-  } catch (e) {
-    if (e instanceof Error && e.message.includes("Unique constraint")) {
-      return { error: `An item named "${name}" (or with that SKU) already exists.` };
+  if (await db.item.findUnique({ where: { name }, select: { id: true } })) {
+    return { error: `An item named "${name}" already exists.` };
+  }
+
+  // A blank SKU is generated. If two people create items at the same moment
+  // they could be handed the same number; the unique constraint catches that
+  // and we simply ask for the next one.
+  const attempts = sku ? 1 : 3;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      await db.item.create({
+        data: {
+          name,
+          categoryId,
+          defaultUomId,
+          materialType,
+          brand,
+          genericName,
+          variant,
+          size,
+          sku: sku ?? (await skuGenerator())(),
+        },
+      });
+      break;
+    } catch (e) {
+      if (e instanceof Error && e.message.includes("Unique constraint")) {
+        if (!sku && attempt < attempts) continue;
+        return { error: sku ? `The SKU "${sku}" is already used by another item.` : "Could not generate a SKU. Please try again." };
+      }
+      return { error: "Could not create item. Please try again." };
     }
-    return { error: "Could not create item. Please try again." };
   }
 
   revalidatePath("/items");

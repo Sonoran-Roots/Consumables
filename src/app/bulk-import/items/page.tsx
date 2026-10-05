@@ -23,7 +23,8 @@ export default function BulkImportItemsPage() {
           <code>uom</code> (unit-of-measure code). Optional: <code>materialType</code>{" "}
           (DM/IM/PM/MM/AFS/NA, defaults to NA), <code>brand</code>,{" "}
           <code>genericName</code>, <code>variant</code>, <code>size</code>,{" "}
-          <code>specialAttribute</code>, <code>sku</code>, <code>legacyId</code>,{" "}
+          <code>specialAttribute</code>, <code>sku</code> (leave blank and one is
+          generated, like SKU-000123), <code>legacyId</code>,{" "}
           <code>defaultVendor</code> (must already exist — import vendors first) and{" "}
           <code>isActive</code> (yes/no).
         </p>

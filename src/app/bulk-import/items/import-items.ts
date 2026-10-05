@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import type { MaterialType, Prisma } from "@prisma/client";
+import { skuGenerator } from "@/lib/sku";
 import { field, parseBool, parseCsv, failure, type BulkResult } from "../csv";
 
 const VALID_MATERIAL_TYPES = new Set(["DM", "IM", "PM", "MM", "AFS", "NA"]);
@@ -151,6 +152,19 @@ export async function runItemsImport(
   });
 
   const notes: string[] = [];
+
+  // New items with no SKU get the next generated one, so every item can be
+  // found and re-used later (e.g. on future purchases) even if the source
+  // sheet had no SKU column filled in.
+  const needSku = toCreate.filter((d) => !d.sku);
+  if (needSku.length > 0) {
+    const nextSku = await skuGenerator((s) => skuOwner.has(s));
+    for (const d of needSku) d.sku = nextSku();
+    notes.push(
+      `${needSku.length} new item${needSku.length === 1 ? " had" : "s had"} no SKU, so ${opts.checkOnly ? "SKUs would be" : "SKUs were"} generated (${needSku[0].sku} to ${needSku[needSku.length - 1].sku}).`
+    );
+  }
+
   if (skippedExisting > 0) {
     notes.push(
       `${skippedExisting} row${skippedExisting === 1 ? "" : "s"} skipped because the item already exists — tick "Update existing items" to change them.`

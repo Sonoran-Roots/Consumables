@@ -27,7 +27,8 @@ export default function BulkImportInventoryPage() {
           required so it can be created. Optional: <code>brand</code>,{" "}
           <code>genericName</code>, <code>variant</code>, <code>size</code>,{" "}
           <code>materialType</code> (DM/IM/PM/MM/AFS/NA, defaults to NA),{" "}
-          <code>sku</code>, <code>unitCost</code>, <code>notes</code>,{" "}
+          <code>sku</code> (leave blank and new items get a generated one),{" "}
+          <code>unitCost</code>, <code>notes</code>,{" "}
           <code>specialAttribute</code>, <code>legacyId</code>, <code>vendor</code>{" "}
           (created if new; a new item&apos;s default vendor is the vendor of its
           most recent lot), and <code>receivedDate</code> (YYYY-MM-DD — sets the

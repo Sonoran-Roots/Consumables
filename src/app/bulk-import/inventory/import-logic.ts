@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { skuGenerator } from "@/lib/sku";
 import { parse } from "csv-parse/sync";
 import type { MaterialType, Prisma } from "@prisma/client";
 
@@ -15,6 +16,8 @@ export type ImportResult = {
   errors: string[];
   // Only set on a dry run: what a real run would create, with nothing written.
   summary?: ImportSummary;
+  // New items that had no SKU in the file and were given a generated one.
+  generatedSkus?: number;
 };
 
 const VALID_MATERIAL_TYPES = new Set(["DM", "IM", "PM", "MM", "AFS", "NA"]);
@@ -67,6 +70,11 @@ export async function runInventoryImport(
   );
   const uomByCode = new Map(uoms.map((u) => [u.code.toLowerCase(), u]));
   const itemByName = new Map(existingItems.map((i) => [i.name.toLowerCase(), i]));
+  // SKUs already taken (by existing items or earlier rows in this file), so a
+  // clash is a clear row error rather than a database failure halfway through.
+  const takenSkus = new Set(
+    existingItems.filter((i) => i.sku).map((i) => i.sku!.toLowerCase())
+  );
   const sitesByName = new Map<string, typeof sites>();
   const siteByCode = new Map(sites.map((s) => [s.code.toLowerCase(), s]));
   for (const s of sites) {
@@ -186,6 +194,13 @@ export async function runInventoryImport(
         return;
       }
 
+      const skuRaw = row.sku?.trim() ?? "";
+      if (skuRaw && takenSkus.has(skuRaw.toLowerCase())) {
+        errors.push(`Row ${rowNum}: SKU "${skuRaw}" is already used by another item.`);
+        return;
+      }
+      if (skuRaw) takenSkus.add(skuRaw.toLowerCase());
+
       newItemsToCreate.set(itemName.toLowerCase(), {
         name: itemName,
         brand: row.brand?.trim() || null,
@@ -217,6 +232,20 @@ export async function runInventoryImport(
     return { successCount: 0, errorCount: errors.length, errors };
   }
 
+  // New items with no SKU in the file get the next generated one.
+  let generatedSkus = 0;
+  if ([...newItemsToCreate.values()].some((d) => !d.sku)) {
+    const nextSku = await skuGenerator((s) => takenSkus.has(s), {
+      fromEmpty: opts.dryRun && opts.assumeEmptyCatalog,
+    });
+    for (const data of newItemsToCreate.values()) {
+      if (!data.sku) {
+        data.sku = nextSku();
+        generatedSkus++;
+      }
+    }
+  }
+
   if (opts.dryRun) {
     const rowsBySite: Record<string, number> = {};
     let totalValue = 0;
@@ -228,6 +257,7 @@ export async function runInventoryImport(
       successCount: validRows.length,
       errorCount: errors.length,
       errors,
+      generatedSkus,
       summary: {
         newItems: newItemsToCreate.size,
         newVendors: [...newVendorNames.values()],
@@ -275,5 +305,5 @@ export async function runInventoryImport(
     }),
   });
 
-  return { successCount: validRows.length, errorCount: errors.length, errors };
+  return { successCount: validRows.length, errorCount: errors.length, errors, generatedSkus };
 }

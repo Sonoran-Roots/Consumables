@@ -26,6 +26,11 @@ export async function importInventoryCsv(_prev: BulkResult, formData: FormData):
       `Total value of the rows: $${r.summary.totalValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.`
     );
   }
+  if (r.generatedSkus) {
+    notes.push(
+      `${r.generatedSkus} new item${r.generatedSkus === 1 ? " had" : "s had"} no SKU, so ${checkOnly ? "SKUs would be" : "SKUs were"} generated (SKU-000123 style).`
+    );
+  }
   return {
     checkOnly,
     created: r.successCount,
