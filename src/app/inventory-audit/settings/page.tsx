@@ -41,14 +41,14 @@ function NamedSection({ title, help, rows, action, noun }: {
 export default async function SettingsPage({ searchParams }: PageProps<"/inventory-audit/settings">) {
   const sp = await searchParams;
   const error = Array.isArray(sp.error) ? sp.error[0] : sp.error;
-  const [facilities, departments, types, categories, managers, coverage, template] = await Promise.all([
+  const [facilities, departments, types, categories, managers, coverage, templates] = await Promise.all([
     db.iaFacility.findMany({ orderBy: { name: "asc" } }),
     db.iaDepartment.findMany({ orderBy: { name: "asc" } }),
     db.iaFindingType.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
     db.iaFindingCategory.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
     db.user.findMany({ where: { auditRole: { in: ["MANAGER", "ADMIN"] } }, orderBy: { name: "asc" }, select: { id: true, name: true, email: true, auditRole: true } }),
     db.iaCoverage.findMany({ include: { facility: true, department: true }, orderBy: { createdAt: "asc" } }),
-    db.iaEmailTemplate.findUnique({ where: { id: "default" } }),
+    db.iaEmailTemplate.findMany({ where: { id: { in: ["default", "reminder"] } } }),
   ]);
 
   return (
@@ -199,29 +199,38 @@ export default async function SettingsPage({ searchParams }: PageProps<"/invento
         </div>
       </section>
 
-      <section className="rounded-lg border border-gray-200 bg-white p-5">
-        <h2 className="text-sm font-medium text-gray-700">Findings email</h2>
-        <p className="mt-1 text-xs text-gray-500">
-          The wording around the list of findings in the email drafted for each manager. You can use{" "}
-          {TEMPLATE_PLACEHOLDERS.map((p) => <code key={p} className="mr-1 rounded bg-gray-100 px-1">{p}</code>)}
-          — they&apos;re filled in for each person.
-        </p>
-        <form action={saveEmailTemplate} className="mt-3 space-y-3">
-          <div>
-            <label className="block text-xs font-medium text-gray-600">Subject</label>
-            <input name="subject" required defaultValue={template?.subject ?? ""} className={`${box} mt-1 w-full`} />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600">Opening</label>
-            <textarea name="intro" required rows={5} defaultValue={template?.intro.trimEnd() ?? ""} className={`${box} mt-1 w-full`} />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600">Closing</label>
-            <textarea name="footer" rows={3} defaultValue={template?.footer ?? ""} className={`${box} mt-1 w-full`} />
-          </div>
-          <button className={save}>Save email wording</button>
-        </form>
-      </section>
+      {[
+        { id: "default", title: "Findings email", help: "Sent to a manager about findings routed to them." },
+        { id: "reminder", title: "Overdue reminder email", help: "Sent about findings that are past their due date and still open." },
+      ].map(({ id, title, help }) => {
+        const template = templates.find((t) => t.id === id);
+        return (
+          <section key={id} className="rounded-lg border border-gray-200 bg-white p-5">
+            <h2 className="text-sm font-medium text-gray-700">{title}</h2>
+            <p className="mt-1 text-xs text-gray-500">
+              {help} The wording around the list of findings; you can use{" "}
+              {TEMPLATE_PLACEHOLDERS.map((p) => <code key={p} className="mr-1 rounded bg-gray-100 px-1">{p}</code>)}
+              — they&apos;re filled in for each person.
+            </p>
+            <form action={saveEmailTemplate} className="mt-3 space-y-3">
+              <input type="hidden" name="id" value={id} />
+              <div>
+                <label className="block text-xs font-medium text-gray-600">Subject</label>
+                <input name="subject" required defaultValue={template?.subject ?? ""} className={`${box} mt-1 w-full`} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600">Opening</label>
+                <textarea name="intro" required rows={5} defaultValue={template?.intro.trimEnd() ?? ""} className={`${box} mt-1 w-full`} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600">Closing</label>
+                <textarea name="footer" rows={3} defaultValue={template?.footer ?? ""} className={`${box} mt-1 w-full`} />
+              </div>
+              <button className={save}>Save wording</button>
+            </form>
+          </section>
+        );
+      })}
     </div>
   );
 }

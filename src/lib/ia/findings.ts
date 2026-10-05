@@ -56,15 +56,19 @@ class StatusChangedError extends Error {}
 // The inventory team copied a drafted email to `recipient` and sent it. Every
 // listed finding gets a note saying so; those still Open move to Notified (the
 // department has now been told), and the rest are left as they are.
+//
+// In "reminder" mode every listed finding also gets a REMINDED entry, which is
+// what the next reminder draft looks at to avoid repeating itself.
 export async function markEmailed(
   findingIds: string[],
   recipient: string,
-  actor: { userId: string }
+  actor: { userId: string },
+  mode: "notice" | "reminder" = "notice"
 ): Promise<{ notified: number; noted: number }> {
   if (findingIds.length === 0) return { notified: 0, noted: 0 };
   const open = await db.iaFinding.findMany({ where: { id: { in: findingIds }, status: "OPEN" }, select: { id: true } });
   const openIds = open.map((f) => f.id);
-  const note = `Emailed to ${recipient}`;
+  const note = `${mode === "reminder" ? "Reminder emailed to" : "Emailed to"} ${recipient}`;
 
   await db.$transaction(async (tx) => {
     const moved = await tx.iaFinding.updateMany({
@@ -76,9 +80,13 @@ export async function markEmailed(
         data: openIds.map((id) => ({ findingId: id, actorId: actor.userId, kind: "STATUS", fromStatus: "OPEN" as const, toStatus: "NOTIFIED" as const, note })),
       });
     }
-    const rest = findingIds.filter((id) => !openIds.includes(id));
-    if (rest.length > 0) {
-      await tx.iaFindingEvent.createMany({ data: rest.map((id) => ({ findingId: id, actorId: actor.userId, kind: "NOTE", note })) });
+    if (mode === "reminder") {
+      await tx.iaFindingEvent.createMany({ data: findingIds.map((id) => ({ findingId: id, actorId: actor.userId, kind: "REMINDED", note })) });
+    } else {
+      const rest = findingIds.filter((id) => !openIds.includes(id));
+      if (rest.length > 0) {
+        await tx.iaFindingEvent.createMany({ data: rest.map((id) => ({ findingId: id, actorId: actor.userId, kind: "NOTE", note })) });
+      }
     }
   });
   return { notified: openIds.length, noted: findingIds.length - openIds.length };

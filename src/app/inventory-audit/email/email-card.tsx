@@ -30,7 +30,7 @@ async function copy(text: string): Promise<boolean> {
 }
 
 export default function EmailCard({
-  recipientName, email, subject, body, findingIds, openCount,
+  recipientName, email, subject, body, findingIds, openCount, mode,
 }: {
   recipientName: string;
   email: string;
@@ -38,6 +38,7 @@ export default function EmailCard({
   body: string;
   findingIds: string[];
   openCount: number; // how many of these are still Open (would move to Notified)
+  mode: "notice" | "reminder";
 }) {
   const router = useRouter();
   const [copied, setCopied] = useState<string | null>(null);
@@ -56,7 +57,7 @@ export default function EmailCard({
   async function markSent() {
     setBusy(true);
     setMessage(null);
-    const r = await markFindingsEmailed(findingIds, `${recipientName} <${email}>`);
+    const r = await markFindingsEmailed(findingIds, `${recipientName} <${email}>`, mode);
     setBusy(false);
     if (!r.ok) return setMessage(r.error);
     setMessage(`Done — ${r.notified} finding${r.notified === 1 ? "" : "s"} marked notified.`);
@@ -85,9 +86,9 @@ export default function EmailCard({
 
       <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-gray-100 pt-3">
         <button type="button" disabled={busy} className={btn} onClick={markSent}>
-          {busy ? "Saving…" : openCount > 0 ? `I sent it — mark ${openCount} notified` : "I sent it — add a note to each"}
+          {busy ? "Saving…" : mode === "reminder" ? "I sent the reminder" : openCount > 0 ? `I sent it — mark ${openCount} notified` : "I sent it — add a note to each"}
         </button>
-        <span className="text-xs text-gray-400">Records that this email went out. Do it after you&apos;ve sent it.</span>
+        <span className="text-xs text-gray-400">{mode === "reminder" ? "Records the reminder on each finding so it isn't repeated too soon." : "Records that this email went out."} Do it after you&apos;ve sent it.</span>
         {message && <span className="text-xs text-[#134229]">{message}</span>}
       </div>
     </div>

@@ -58,6 +58,21 @@ export const targetStatus = (action: FindingAction): FindingStatus => RULES[acti
 export const CAN_ENTER_FINDINGS: AuditRole[] = ["AUDITOR", "ADMIN"];
 export const CAN_CONFIGURE: AuditRole[] = ["ADMIN"];
 
+const DAY_MS = 86_400_000;
+export const startOfUtcDay = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+
+// A finding is overdue once its due DATE has passed — due today is still on
+// time. Only work nobody has finished yet (Open / Notified) can be overdue;
+// once the department says it's fixed, the ball is with the inventory team.
+// Database filters use overdueCutoff() so lists and counts agree with this.
+export const overdueCutoff = (now = new Date()) => startOfUtcDay(now);
+
 export function isOverdue(f: { status: FindingStatus; dueDate: Date | null }, now = new Date()): boolean {
-  return f.dueDate != null && f.status !== "VERIFIED" && f.status !== "RESOLVED" && f.dueDate.getTime() < now.getTime();
+  return f.dueDate != null && (f.status === "OPEN" || f.status === "NOTIFIED") && f.dueDate.getTime() < overdueCutoff(now).getTime();
+}
+
+// Whole days past due (due yesterday = 1); 0 when not overdue.
+export function daysOverdue(f: { status: FindingStatus; dueDate: Date | null }, now = new Date()): number {
+  if (!isOverdue(f, now)) return 0;
+  return Math.ceil((overdueCutoff(now).getTime() - f.dueDate!.getTime()) / DAY_MS);
 }

@@ -5,7 +5,7 @@ import { getAuditSession } from "@/lib/ia/auth";
 import { findingScope } from "@/lib/ia/scope";
 import { formatDate } from "@/lib/ia/dates";
 import StatusBadge from "./_components/status-badge";
-import { isOverdue } from "@/lib/ia/workflow";
+import { CAN_ENTER_FINDINGS, isOverdue, overdueCutoff } from "@/lib/ia/workflow";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +24,7 @@ export default async function InventoryAuditHome({ searchParams }: PageProps<"/i
 
   const [byStatus, overdue, byDepartment, recent] = await Promise.all([
     db.iaFinding.groupBy({ by: ["status"], where: scope, _count: { _all: true } }),
-    db.iaFinding.count({ where: { AND: [scope, { status: { in: ["OPEN", "NOTIFIED"] }, dueDate: { lt: now } }] } }),
+    db.iaFinding.count({ where: { AND: [scope, { status: { in: ["OPEN", "NOTIFIED"] }, dueDate: { lt: overdueCutoff(now) } }] } }),
     db.iaFinding.groupBy({ by: ["departmentId"], where: { AND: [scope, { status: { in: ["OPEN", "NOTIFIED"] } }] }, _count: { _all: true }, orderBy: { _count: { departmentId: "desc" } }, take: 8 }),
     db.iaFinding.findMany({ where: scope, orderBy: { createdAt: "desc" }, take: 6, include: { facility: true, department: true } }),
   ]);
@@ -54,6 +54,13 @@ export default async function InventoryAuditHome({ searchParams }: PageProps<"/i
           <p className="mt-1 text-sm text-gray-500">Overdue</p>
         </Link>
       </div>
+
+      {overdue > 0 && me && CAN_ENTER_FINDINGS.includes(me.role) && (
+        <p className="mt-3 text-sm text-gray-600">
+          {overdue.toLocaleString("en-US")} finding{overdue === 1 ? " is" : "s are"} past due.{" "}
+          <Link href="/inventory-audit/email?show=overdue" className="font-medium text-gray-900 underline">Draft reminder emails</Link>
+        </p>
+      )}
 
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
         <section>

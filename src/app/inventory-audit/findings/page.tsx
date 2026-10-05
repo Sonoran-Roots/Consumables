@@ -5,7 +5,7 @@ import { getAuditSession } from "@/lib/ia/auth";
 import { findingScope } from "@/lib/ia/scope";
 import { getFormOptions } from "@/lib/ia/options";
 import { formatDate } from "@/lib/ia/dates";
-import { CAN_ENTER_FINDINGS, isOverdue } from "@/lib/ia/workflow";
+import { CAN_ENTER_FINDINGS, daysOverdue, isOverdue, overdueCutoff } from "@/lib/ia/workflow";
 import StatusBadge from "../_components/status-badge";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +30,7 @@ export default async function FindingsPage({ searchParams }: PageProps<"/invento
     ...(facilityId ? { facilityId } : {}),
     ...(departmentId ? { OR: [{ departmentId }, { secondDepartmentId: departmentId }] } : {}),
     ...(typeId ? { findingTypeId: typeId } : {}),
-    ...(overdueOnly ? { status: { in: ["OPEN", "NOTIFIED"] }, dueDate: { lt: new Date() } } : {}),
+    ...(overdueOnly ? { status: { in: ["OPEN", "NOTIFIED"] }, dueDate: { lt: overdueCutoff() } } : {}),
     ...(q
       ? { AND: [{ OR: [
           { description: { contains: q, mode: "insensitive" } }, { product: { contains: q, mode: "insensitive" } },
@@ -123,7 +123,10 @@ export default async function FindingsPage({ searchParams }: PageProps<"/invento
                   {f.product && <p className="truncate text-xs text-gray-400">{f.product}</p>}
                 </td>
                 <td className="whitespace-nowrap px-3 py-2"><StatusBadge status={f.status} overdue={isOverdue(f)} /></td>
-                <td className="whitespace-nowrap px-3 py-2 text-gray-600">{formatDate(f.dueDate)}</td>
+                <td className="whitespace-nowrap px-3 py-2 text-gray-600">
+                  {formatDate(f.dueDate)}
+                  {isOverdue(f) && <span className="ml-1.5 text-xs font-medium text-red-700">{daysOverdue(f)}d overdue</span>}
+                </td>
                 <td className="whitespace-nowrap px-3 py-2 text-gray-600">{f.assignedTo ? f.assignedTo.name || f.assignedTo.email : "—"}</td>
               </tr>
             ))}

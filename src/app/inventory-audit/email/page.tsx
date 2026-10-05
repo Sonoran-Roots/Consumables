@@ -7,7 +7,8 @@ import { getFormOptions } from "@/lib/ia/options";
 import { groupByRecipient } from "@/lib/ia/routing";
 import { buildEmail, type EmailFinding, type EmailTemplate } from "@/lib/ia/email";
 import { formatDate } from "@/lib/ia/dates";
-import { CAN_ENTER_FINDINGS } from "@/lib/ia/workflow";
+import { CAN_ENTER_FINDINGS, overdueCutoff } from "@/lib/ia/workflow";
+import { REMINDER_GAP_CHOICES, readGap, splitRecentlyReminded } from "@/lib/ia/reminders";
 import EmailCard from "./email-card";
 
 export const dynamic = "force-dynamic";
@@ -29,10 +30,12 @@ export default async function EmailPage({ searchParams }: PageProps<"/inventory-
   const show = ["new", "open", "overdue"].includes(one(sp.show)) ? one(sp.show) : "new";
   const facilityId = one(sp.facility), departmentId = one(sp.department);
   const now = new Date();
+  const isReminder = show === "overdue";
+  const gap = isReminder ? readGap(one(sp.gap)) : 0;
 
   const status: Prisma.IaFindingWhereInput =
     show === "new" ? { status: "OPEN" }
-    : show === "overdue" ? { status: { in: ["OPEN", "NOTIFIED"] }, dueDate: { lt: now } }
+    : show === "overdue" ? { status: { in: ["OPEN", "NOTIFIED"] }, dueDate: { lt: overdueCutoff(now) } }
     : { status: { in: ["OPEN", "NOTIFIED"] } };
   const where: Prisma.IaFindingWhereInput = {
     AND: [
@@ -42,15 +45,27 @@ export default async function EmailPage({ searchParams }: PageProps<"/inventory-
     ],
   };
 
-  const [opts, findings, rules, template] = await Promise.all([
+  const [opts, allMatching, rules, template] = await Promise.all([
     getFormOptions(),
     db.iaFinding.findMany({
       where, take: LIMIT, orderBy: [{ auditDate: "asc" }],
       include: { facility: true, department: true, secondDepartment: true, findingType: true, category: true },
     }),
     db.iaCoverage.findMany(),
-    db.iaEmailTemplate.findUnique({ where: { id: "default" } }),
+    db.iaEmailTemplate.findUnique({ where: { id: isReminder ? "reminder" : "default" } }),
   ]);
+
+  // Reminders skip anything already reminded within the gap.
+  let findings = allMatching;
+  let recentlyReminded = 0;
+  if (isReminder && gap > 0 && allMatching.length > 0) {
+    const last = await db.iaFindingEvent.groupBy({
+      by: ["findingId"], where: { kind: "REMINDED", findingId: { in: allMatching.map((f) => f.id) } }, _max: { at: true },
+    });
+    const split = splitRecentlyReminded(allMatching, new Map(last.flatMap((l) => (l._max.at ? [[l.findingId, l._max.at] as const] : []))), gap, now);
+    findings = split.send;
+    recentlyReminded = split.recent.length;
+  }
 
   const { byRecipient, unrouted } = groupByRecipient(findings, rules);
   const people = await db.user.findMany({ where: { id: { in: [...byRecipient.keys()] } }, select: { id: true, name: true, email: true } });
@@ -90,7 +105,7 @@ export default async function EmailPage({ searchParams }: PageProps<"/inventory-
         <select name="show" defaultValue={show} className={select} aria-label="Which findings">
           <option value="new">Open findings nobody has been told about yet</option>
           <option value="open">All open and notified findings</option>
-          <option value="overdue">Overdue findings only</option>
+          <option value="overdue">Reminders — overdue findings</option>
         </select>
         <select name="facility" defaultValue={facilityId} className={select}>
           <option value="">All facilities</option>
@@ -100,12 +115,20 @@ export default async function EmailPage({ searchParams }: PageProps<"/inventory-
           <option value="">All departments</option>
           {opts.departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
         </select>
+        {isReminder && (
+          <select name="gap" defaultValue={String(gap)} className={select} aria-label="Skip findings reminded recently">
+            {REMINDER_GAP_CHOICES.map((d) => (
+              <option key={d} value={d}>{d === 0 ? "Include everything overdue" : `Skip ones reminded in the last ${d} days`}</option>
+            ))}
+          </select>
+        )}
         <button className="rounded-md border border-black bg-black px-3 py-1.5 text-sm font-medium text-white hover:bg-white hover:text-black">Draft emails</button>
       </form>
 
       <p className="mt-4 text-sm text-gray-600">
         {findings.length.toLocaleString("en-US")} finding{findings.length === 1 ? "" : "s"} selected · {cards.length} email{cards.length === 1 ? "" : "s"} drafted
-        {findings.length >= LIMIT && <span className="text-amber-700"> (limited to the oldest {LIMIT.toLocaleString("en-US")} — narrow the filters)</span>}
+        {recentlyReminded > 0 && <span> · {recentlyReminded} skipped (already reminded in the last {gap} days)</span>}
+        {allMatching.length >= LIMIT && <span className="text-amber-700"> (limited to the oldest {LIMIT.toLocaleString("en-US")} — narrow the filters)</span>}
       </p>
 
       {unrouted.length > 0 && (
@@ -130,7 +153,7 @@ export default async function EmailPage({ searchParams }: PageProps<"/inventory-
 
       <div className="mt-4 space-y-4">
         {cards.map((c) => (
-          <EmailCard key={c.userId} recipientName={c.name} email={c.email} subject={c.subject} body={c.body} findingIds={c.ids} openCount={c.openCount} />
+          <EmailCard key={c.userId} recipientName={c.name} email={c.email} subject={c.subject} body={c.body} findingIds={c.ids} openCount={c.openCount} mode={isReminder ? "reminder" : "notice"} />
         ))}
         {cards.length === 0 && unrouted.length === 0 && (
           <p className="rounded-lg border border-gray-200 bg-white px-4 py-8 text-center text-sm text-gray-400">

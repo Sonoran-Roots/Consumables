@@ -6,7 +6,7 @@ import { getAuditSession } from "@/lib/ia/auth";
 import { canSeeFinding } from "@/lib/ia/scope";
 import { getFormOptions } from "@/lib/ia/options";
 import { formatDate } from "@/lib/ia/dates";
-import { availableActions, CAN_ENTER_FINDINGS, isOverdue, STATUS_LABEL } from "@/lib/ia/workflow";
+import { availableActions, CAN_ENTER_FINDINGS, daysOverdue, isOverdue, STATUS_LABEL } from "@/lib/ia/workflow";
 import StatusBadge from "../../_components/status-badge";
 import FindingActions from "../../_components/finding-actions";
 
@@ -75,7 +75,7 @@ export default async function FindingPage({ params }: PageProps<"/inventory-audi
             <Field label="Department" value={f.department.name} />
             <Field label="Second department" value={f.secondDepartment?.name} />
             <Field label="Auditors" value={f.auditors} />
-            <Field label="Due" value={f.dueDate ? formatDate(f.dueDate) : null} />
+            <Field label="Due" value={f.dueDate ? <>{formatDate(f.dueDate)}{isOverdue(f) && <span className="ml-2 font-medium text-red-700">{daysOverdue(f)} day{daysOverdue(f) === 1 ? "" : "s"} overdue</span>}</> : null} />
             <Field label="Product" value={f.product} />
             <Field label="Batch ID" value={f.batchId} />
             <Field label="PID" value={f.pid} />
@@ -106,6 +106,7 @@ export default async function FindingPage({ params }: PageProps<"/inventory-audi
                     {e.kind === "EDITED" && <strong className="font-medium">Edited</strong>}
                     {e.kind === "ASSIGNED" && <strong className="font-medium">Assignment</strong>}
                     {e.kind === "NOTE" && <strong className="font-medium">Note</strong>}
+                    {e.kind === "REMINDED" && <strong className="font-medium">Reminder sent</strong>}
                     <span className="text-gray-500"> · {person(e.actor) ?? "someone"} · {e.at.toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}</span>
                   </p>
                   {e.note && <p className="mt-0.5 whitespace-pre-wrap text-gray-600">{e.note}</p>}

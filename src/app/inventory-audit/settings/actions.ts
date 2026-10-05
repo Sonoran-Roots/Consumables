@@ -98,14 +98,16 @@ export async function removeCoverage(formData: FormData) {
 
 export async function saveEmailTemplate(formData: FormData) {
   await guard();
+  const id = text(formData, "id");
+  if (id !== "default" && id !== "reminder") return done("Unknown email template.");
   const subject = text(formData, "subject");
   const intro = String(formData.get("intro") ?? "").trim();
   const footer = String(formData.get("footer") ?? "").trim();
   if (!subject || !intro) return done("The email needs a subject and an opening.");
   await db.iaEmailTemplate.upsert({
-    where: { id: "default" },
+    where: { id },
     update: { subject, intro: intro + "\n", footer },
-    create: { id: "default", subject, intro: intro + "\n", footer },
+    create: { id, subject, intro: intro + "\n", footer },
   });
   return done();
 }

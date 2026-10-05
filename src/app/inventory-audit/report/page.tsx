@@ -5,7 +5,7 @@ import { getAuditSession } from "@/lib/ia/auth";
 import { findingScope } from "@/lib/ia/scope";
 import { baseWhere, inPeriod, readReportFilters } from "@/lib/ia/report";
 import { formatDate, toDateInput } from "@/lib/ia/dates";
-import { CAN_ENTER_FINDINGS, isOverdue, type FindingStatus } from "@/lib/ia/workflow";
+import { CAN_ENTER_FINDINGS, daysOverdue, isOverdue, type FindingStatus } from "@/lib/ia/workflow";
 import { getFormOptions } from "@/lib/ia/options";
 import StatusBadge from "../_components/status-badge";
 
@@ -177,7 +177,10 @@ export default async function ReportPage({ searchParams }: PageProps<"/inventory
             <tbody className="divide-y divide-gray-100">
               {attention.map((f) => (
                 <tr key={f.id} className="hover:bg-gray-50">
-                  <td className="whitespace-nowrap px-3 py-2 text-gray-600">{formatDate(f.dueDate)}</td>
+                  <td className="whitespace-nowrap px-3 py-2 text-gray-600">
+                    {formatDate(f.dueDate)}
+                    {isOverdue(f, now) && <span className="ml-1.5 text-xs font-medium text-red-700">{daysOverdue(f, now)}d overdue</span>}
+                  </td>
                   <td className="whitespace-nowrap px-3 py-2 text-gray-600">{formatDate(f.auditDate)}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-gray-600">{f.facility.name}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-gray-600">{f.department.name}</td>

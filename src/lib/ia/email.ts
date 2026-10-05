@@ -3,6 +3,7 @@
 // around the list comes from the editable template; the list itself is
 // generated, so every finding carries what the manager needs to act on it.
 import { formatDate } from "./dates";
+import { daysOverdue, type FindingStatus } from "./workflow";
 
 export type EmailTemplate = { subject: string; intro: string; footer: string };
 
@@ -59,8 +60,8 @@ export function buildEmail(input: {
   };
 
   const blocks = [...input.findings].sort(byUrgency).map((f, i) => {
-    const overdue = f.dueDate != null && f.dueDate.getTime() < now.getTime() && (f.status === "OPEN" || f.status === "NOTIFIED");
-    const heading = `${i + 1}. ${f.findingTypeName}${f.categoryName ? ` — ${f.categoryName}` : ""}${overdue ? "  [OVERDUE]" : ""}`;
+    const late = daysOverdue({ status: f.status as FindingStatus, dueDate: f.dueDate }, now);
+    const heading = `${i + 1}. ${f.findingTypeName}${f.categoryName ? ` — ${f.categoryName}` : ""}${late > 0 ? `  [OVERDUE: ${late} day${late === 1 ? "" : "s"}]` : ""}`;
     const where = [
       `Facility: ${f.facilityName}`,
       `Department: ${f.departmentName}${f.secondDepartmentName ? ` / ${f.secondDepartmentName}` : ""}`,
