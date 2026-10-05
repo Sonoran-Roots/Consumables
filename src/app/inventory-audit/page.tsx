@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
+import type { Prisma } from "@prisma/client";
+import { getAuditSession } from "@/lib/ia/auth";
+import { findingScope } from "@/lib/ia/scope";
 import { formatDate } from "@/lib/ia/dates";
 import StatusBadge from "./_components/status-badge";
 import { isOverdue } from "@/lib/ia/workflow";
@@ -16,12 +19,14 @@ const STATUSES = [
 export default async function InventoryAuditHome({ searchParams }: PageProps<"/inventory-audit">) {
   const params = await searchParams;
   const now = new Date();
+  const me = await getAuditSession();
+  const scope: Prisma.IaFindingWhereInput = me ? await findingScope(me) : { id: "" };
 
   const [byStatus, overdue, byDepartment, recent] = await Promise.all([
-    db.iaFinding.groupBy({ by: ["status"], _count: { _all: true } }),
-    db.iaFinding.count({ where: { status: { in: ["OPEN", "NOTIFIED"] }, dueDate: { lt: now } } }),
-    db.iaFinding.groupBy({ by: ["departmentId"], where: { status: { in: ["OPEN", "NOTIFIED"] } }, _count: { _all: true }, orderBy: { _count: { departmentId: "desc" } }, take: 8 }),
-    db.iaFinding.findMany({ orderBy: { createdAt: "desc" }, take: 6, include: { facility: true, department: true } }),
+    db.iaFinding.groupBy({ by: ["status"], where: scope, _count: { _all: true } }),
+    db.iaFinding.count({ where: { AND: [scope, { status: { in: ["OPEN", "NOTIFIED"] }, dueDate: { lt: now } }] } }),
+    db.iaFinding.groupBy({ by: ["departmentId"], where: { AND: [scope, { status: { in: ["OPEN", "NOTIFIED"] } }] }, _count: { _all: true }, orderBy: { _count: { departmentId: "desc" } }, take: 8 }),
+    db.iaFinding.findMany({ where: scope, orderBy: { createdAt: "desc" }, take: 6, include: { facility: true, department: true } }),
   ]);
   const departments = await db.iaDepartment.findMany({ where: { id: { in: byDepartment.map((d) => d.departmentId) } }, select: { id: true, name: true } });
   const deptName = new Map(departments.map((d) => [d.id, d.name]));

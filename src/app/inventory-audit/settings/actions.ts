@@ -71,6 +71,45 @@ export async function saveCategory(formData: FormData) {
   return done();
 }
 
+export async function addCoverage(formData: FormData) {
+  await guard();
+  const userId = text(formData, "userId");
+  const facilityId = text(formData, "facilityId") || null;
+  const departmentId = text(formData, "departmentId") || null;
+  if (!userId) return done("Choose the manager.");
+  if (!facilityId && !departmentId) return done("Choose a facility, a department, or both.");
+
+  const manager = await db.user.findUnique({ where: { id: userId }, select: { auditRole: true } });
+  if (!manager || (manager.auditRole !== "MANAGER" && manager.auditRole !== "ADMIN")) {
+    return done("Only people with Manager or Admin audit access can be given coverage.");
+  }
+  const existing = await db.iaCoverage.findFirst({ where: { userId, facilityId, departmentId }, select: { id: true } });
+  if (existing) return done("That manager already has that coverage.");
+  await db.iaCoverage.create({ data: { userId, facilityId, departmentId } });
+  return done();
+}
+
+export async function removeCoverage(formData: FormData) {
+  await guard();
+  const id = text(formData, "id");
+  if (id) await db.iaCoverage.deleteMany({ where: { id } });
+  return done();
+}
+
+export async function saveEmailTemplate(formData: FormData) {
+  await guard();
+  const subject = text(formData, "subject");
+  const intro = String(formData.get("intro") ?? "").trim();
+  const footer = String(formData.get("footer") ?? "").trim();
+  if (!subject || !intro) return done("The email needs a subject and an opening.");
+  await db.iaEmailTemplate.upsert({
+    where: { id: "default" },
+    update: { subject, intro: intro + "\n", footer },
+    create: { id: "default", subject, intro: intro + "\n", footer },
+  });
+  return done();
+}
+
 export async function saveFindingType(formData: FormData) {
   await guard();
   const id = text(formData, "id"), name = text(formData, "name");

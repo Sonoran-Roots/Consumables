@@ -1,9 +1,8 @@
 import Link from "next/link";
-import { headers } from "next/headers";
 import { db } from "@/lib/db";
-import { auth } from "@/lib/auth";
 import type { Prisma } from "@prisma/client";
-import { isAuditRole } from "@/lib/access";
+import { getAuditSession } from "@/lib/ia/auth";
+import { findingScope } from "@/lib/ia/scope";
 import { getFormOptions } from "@/lib/ia/options";
 import { formatDate } from "@/lib/ia/dates";
 import { CAN_ENTER_FINDINGS, isOverdue } from "@/lib/ia/workflow";
@@ -21,11 +20,12 @@ export default async function FindingsPage({ searchParams }: PageProps<"/invento
   const typeId = one(sp.type), q = one(sp.q).trim(), overdueOnly = one(sp.overdue) === "1";
   const page = Math.max(1, Number(one(sp.page)) || 1);
 
-  const session = await auth.api.getSession({ headers: await headers() });
-  const role = (session?.user as { auditRole?: string | null } | undefined)?.auditRole;
-  const canEnter = isAuditRole(role) && CAN_ENTER_FINDINGS.includes(role);
+  const me = await getAuditSession();
+  const canEnter = me !== null && CAN_ENTER_FINDINGS.includes(me.role);
+  // A manager only sees the findings routed to them.
+  const scope: Prisma.IaFindingWhereInput = me ? await findingScope(me) : { id: "" };
 
-  const where: Prisma.IaFindingWhereInput = {
+  const filters: Prisma.IaFindingWhereInput = {
     ...(status ? { status: status as Prisma.IaFindingWhereInput["status"] } : {}),
     ...(facilityId ? { facilityId } : {}),
     ...(departmentId ? { OR: [{ departmentId }, { secondDepartmentId: departmentId }] } : {}),
@@ -39,6 +39,7 @@ export default async function FindingsPage({ searchParams }: PageProps<"/invento
       : {}),
   };
 
+  const where: Prisma.IaFindingWhereInput = { AND: [filters, scope] };
   const [opts, total, findings] = await Promise.all([
     getFormOptions(),
     db.iaFinding.count({ where }),

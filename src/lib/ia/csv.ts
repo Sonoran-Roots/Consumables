@@ -49,4 +49,12 @@ export function pick(row: Row, exact: string[], prefix: string[] = []): string {
 export const hasColumn = (row: Row, exact: string[], prefix: string[] = []) =>
   Object.keys(row).some((k) => exact.includes(k) || prefix.some((p) => k.startsWith(p)));
 
+// One quoted CSV cell. A value that starts with = + - @ (or a tab/CR) would be
+// run as a formula by Excel, so it's prefixed with an apostrophe.
+export const csvCell = (v: unknown): string => {
+  let s = v == null ? "" : String(v);
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  return `"${s.replace(/"/g, '""')}"`;
+};
+
 export const truthy = (v: string) => ["true", "yes", "y", "1", "x", "checked"].includes(v.trim().toLowerCase());

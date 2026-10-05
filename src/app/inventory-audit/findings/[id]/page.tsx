@@ -1,10 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { headers } from "next/headers";
 import BackLink from "@/components/back-link";
 import { db } from "@/lib/db";
-import { auth } from "@/lib/auth";
-import { isAuditRole } from "@/lib/access";
+import { getAuditSession } from "@/lib/ia/auth";
+import { canSeeFinding } from "@/lib/ia/scope";
 import { getFormOptions } from "@/lib/ia/options";
 import { formatDate } from "@/lib/ia/dates";
 import { availableActions, CAN_ENTER_FINDINGS, isOverdue, STATUS_LABEL } from "@/lib/ia/workflow";
@@ -27,7 +26,7 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
 
 export default async function FindingPage({ params }: PageProps<"/inventory-audit/findings/[id]">) {
   const { id } = await params;
-  const [f, opts, session] = await Promise.all([
+  const [f, opts, me] = await Promise.all([
     db.iaFinding.findUnique({
       where: { id },
       include: {
@@ -39,12 +38,12 @@ export default async function FindingPage({ params }: PageProps<"/inventory-audi
       },
     }),
     getFormOptions(),
-    auth.api.getSession({ headers: await headers() }),
+    getAuditSession(),
   ]);
-  if (!f) notFound();
+  // Not found rather than forbidden: a manager shouldn't learn a finding exists if it isn't theirs.
+  if (!f || !me || !(await canSeeFinding(me, id))) notFound();
 
-  const rawRole = (session?.user as { auditRole?: string | null } | undefined)?.auditRole;
-  const role = isAuditRole(rawRole) ? rawRole : null;
+  const role = me.role;
   const actions = availableActions(f.status, role);
   const canEdit = role !== null && CAN_ENTER_FINDINGS.includes(role);
   const person = (u: { name: string; email: string } | null) => (u ? u.name || u.email : null);

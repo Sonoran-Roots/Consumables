@@ -7,6 +7,7 @@ import type { IaAuditType, Prisma } from "@prisma/client";
 import { getAuditSession } from "@/lib/ia/auth";
 import { addDays, parseFlexibleDate } from "@/lib/ia/dates";
 import { transitionFinding, type ActionResult } from "@/lib/ia/findings";
+import { canSeeFinding } from "@/lib/ia/scope";
 import { CAN_ENTER_FINDINGS, type FindingAction } from "@/lib/ia/workflow";
 
 export type FindingFormState = { error?: string } | null;
@@ -118,6 +119,7 @@ export async function updateFinding(_prev: FindingFormState, formData: FormData)
 export async function changeFindingStatus(findingId: string, action: FindingAction, note: string): Promise<ActionResult> {
   const me = await getAuditSession();
   if (!me) return { ok: false, error: "You don't have access to Inventory Audit." };
+  if (!(await canSeeFinding(me, findingId))) return { ok: false, error: "That finding isn't assigned to you." };
   const result = await transitionFinding(findingId, action, { userId: me.userId, role: me.role }, note);
   if (result.ok) revalidatePath("/inventory-audit", "layout");
   return result;
@@ -126,6 +128,7 @@ export async function changeFindingStatus(findingId: string, action: FindingActi
 export async function addFindingNote(findingId: string, note: string): Promise<ActionResult> {
   const me = await getAuditSession();
   if (!me) return { ok: false, error: "You don't have access to Inventory Audit." };
+  if (!(await canSeeFinding(me, findingId))) return { ok: false, error: "That finding isn't assigned to you." };
   const clean = note.trim();
   if (!clean) return { ok: false, error: "Write a note first." };
   await db.iaFindingEvent.create({ data: { findingId, actorId: me.userId, kind: "NOTE", note: clean } });

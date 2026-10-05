@@ -623,6 +623,7 @@ model User {
   iaFindingsResolved IaFinding[]      @relation("IaFindingResolver")
   iaFindingsVerified IaFinding[]      @relation("IaFindingVerifier")
   iaFindingEvents    IaFindingEvent[]
+  iaCoverage         IaCoverage[]     @relation("IaCoverageUser")
 }
 
 model Session {
@@ -694,6 +695,7 @@ model IaFacility {
   createdAt DateTime @default(now())
 
   findings IaFinding[]
+  coverage IaCoverage[]
 }
 
 // The department a finding is attributed to (who has to fix it).
@@ -704,8 +706,9 @@ model IaDepartment {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
 
-  findings       IaFinding[] @relation("IaFindingDept")
-  findingsSecond IaFinding[] @relation("IaFindingDept2")
+  findings       IaFinding[]  @relation("IaFindingDept")
+  findingsSecond IaFinding[]  @relation("IaFindingDept2")
+  coverage       IaCoverage[]
 }
 
 // e.g. "Internal Process", "AZDHS Compliance". defaultDueDays sets a finding's
@@ -814,4 +817,34 @@ model IaFindingEvent {
   note       String?
 
   @@index([findingId, at])
+}
+
+// Who follows up on which findings. A manager is routed a finding when it is
+// assigned to them directly, or when it matches one of their coverage rows. A
+// row names a facility, a department, or both (then both must match, e.g.
+// "Fulfillment at McDowell Hub"); at least one is always set (enforced in the
+// migration). Managers only see the findings routed to them.
+model IaCoverage {
+  id           String        @id @default(cuid())
+  user         User          @relation("IaCoverageUser", fields: [userId], references: [id], onDelete: Cascade)
+  userId       String
+  facility     IaFacility?   @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  facilityId   String?
+  department   IaDepartment? @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  departmentId String?
+  createdAt    DateTime      @default(now())
+
+  @@index([userId])
+}
+
+// The wording of the findings email the app drafts for each manager. One row
+// ("default"). The list of findings in the middle is generated; subject, intro
+// and footer are editable and may use {managerName}, {count}, {date},
+// {senderName} and {reportLink}.
+model IaEmailTemplate {
+  id        String   @id
+  subject   String
+  intro     String
+  footer    String
+  updatedAt DateTime @updatedAt
 }

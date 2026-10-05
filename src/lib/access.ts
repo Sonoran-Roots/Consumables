@@ -118,6 +118,7 @@ export function decideAccess(
 const AUDIT_ROUTE_ROLES: { prefix: string; roles: AuditRole[] }[] = [
   { prefix: `${AUDIT_PREFIX}/settings`, roles: ["ADMIN"] },
   { prefix: `${AUDIT_PREFIX}/upload`, roles: ["AUDITOR", "ADMIN"] },
+  { prefix: `${AUDIT_PREFIX}/email`, roles: ["AUDITOR", "ADMIN"] },
   { prefix: `${AUDIT_PREFIX}/findings/new`, roles: ["AUDITOR", "ADMIN"] },
   { prefix: `${AUDIT_PREFIX}/edit`, roles: ["AUDITOR", "ADMIN"] },
 ];

@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
-import { saveCategory, saveDepartment, saveFacility, saveFindingType } from "./actions";
+import { TEMPLATE_PLACEHOLDERS } from "@/lib/ia/email";
+import { addCoverage, removeCoverage, saveCategory, saveDepartment, saveEmailTemplate, saveFacility, saveFindingType } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -40,11 +41,14 @@ function NamedSection({ title, help, rows, action, noun }: {
 export default async function SettingsPage({ searchParams }: PageProps<"/inventory-audit/settings">) {
   const sp = await searchParams;
   const error = Array.isArray(sp.error) ? sp.error[0] : sp.error;
-  const [facilities, departments, types, categories] = await Promise.all([
+  const [facilities, departments, types, categories, managers, coverage, template] = await Promise.all([
     db.iaFacility.findMany({ orderBy: { name: "asc" } }),
     db.iaDepartment.findMany({ orderBy: { name: "asc" } }),
     db.iaFindingType.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
     db.iaFindingCategory.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
+    db.user.findMany({ where: { auditRole: { in: ["MANAGER", "ADMIN"] } }, orderBy: { name: "asc" }, select: { id: true, name: true, email: true, auditRole: true } }),
+    db.iaCoverage.findMany({ include: { facility: true, department: true }, orderBy: { createdAt: "asc" } }),
+    db.iaEmailTemplate.findUnique({ where: { id: "default" } }),
   ]);
 
   return (
@@ -131,6 +135,92 @@ export default async function SettingsPage({ searchParams }: PageProps<"/invento
             <button className={save}>Add category</button>
           </form>
         </div>
+      </section>
+
+      <section className="rounded-lg border border-gray-200 bg-white p-5">
+        <h2 className="text-sm font-medium text-gray-700">Manager coverage</h2>
+        <p className="mt-1 text-xs text-gray-500">
+          Who follows up on which findings. A manager is sent a finding when it&apos;s assigned to them directly, or
+          when it matches one of their rules below. A rule can name a facility, a department, or both (then a
+          finding must match both). Managers see only the findings routed to them; the inventory team and admins
+          see everything.
+        </p>
+        <div className="mt-3 space-y-3">
+          {managers.map((m) => {
+            const rules = coverage.filter((c) => c.userId === m.id);
+            return (
+              <div key={m.id} className="rounded-md border border-gray-100 p-3">
+                <p className="text-sm font-medium text-gray-900">
+                  {m.name || m.email} <span className="text-xs font-normal text-gray-400">· {m.auditRole === "ADMIN" ? "Admin" : "Manager"}</span>
+                </p>
+                {rules.length === 0 ? (
+                  <p className="mt-1 text-xs text-gray-400">No coverage rules — only sees findings assigned to them directly.</p>
+                ) : (
+                  <ul className="mt-1 space-y-1">
+                    {rules.map((c) => (
+                      <li key={c.id} className="flex items-center gap-2 text-sm text-gray-700">
+                        <span>
+                          {c.facility ? c.facility.name : "Any facility"} <span className="text-gray-400">·</span>{" "}
+                          {c.department ? c.department.name : "any department"}
+                        </span>
+                        <form action={removeCoverage}>
+                          <input type="hidden" name="id" value={c.id} />
+                          <button className="text-xs text-gray-400 hover:text-red-600 hover:underline">Remove</button>
+                        </form>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            );
+          })}
+          {managers.length === 0 && (
+            <p className="text-sm text-gray-400">
+              No one has Manager access yet — set it on the Employees page (Audit access).
+            </p>
+          )}
+          {managers.length > 0 && (
+            <form action={addCoverage} className="flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3">
+              <select name="userId" required defaultValue="" className={box} aria-label="Manager">
+                <option value="" disabled>Manager…</option>
+                {managers.map((m) => <option key={m.id} value={m.id}>{m.name || m.email}</option>)}
+              </select>
+              <select name="facilityId" defaultValue="" className={box} aria-label="Facility">
+                <option value="">Any facility</option>
+                {facilities.filter((f) => f.isActive).map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+              </select>
+              <select name="departmentId" defaultValue="" className={box} aria-label="Department">
+                <option value="">Any department</option>
+                {departments.filter((d) => d.isActive).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </select>
+              <button className={save}>Add coverage</button>
+            </form>
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-gray-200 bg-white p-5">
+        <h2 className="text-sm font-medium text-gray-700">Findings email</h2>
+        <p className="mt-1 text-xs text-gray-500">
+          The wording around the list of findings in the email drafted for each manager. You can use{" "}
+          {TEMPLATE_PLACEHOLDERS.map((p) => <code key={p} className="mr-1 rounded bg-gray-100 px-1">{p}</code>)}
+          — they&apos;re filled in for each person.
+        </p>
+        <form action={saveEmailTemplate} className="mt-3 space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-600">Subject</label>
+            <input name="subject" required defaultValue={template?.subject ?? ""} className={`${box} mt-1 w-full`} />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600">Opening</label>
+            <textarea name="intro" required rows={5} defaultValue={template?.intro.trimEnd() ?? ""} className={`${box} mt-1 w-full`} />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600">Closing</label>
+            <textarea name="footer" rows={3} defaultValue={template?.footer ?? ""} className={`${box} mt-1 w-full`} />
+          </div>
+          <button className={save}>Save email wording</button>
+        </form>
       </section>
     </div>
   );
