@@ -1,0 +1,4 @@
+date,site,employee,item,quantity,type,purpose,department,notes
+2026-10-02,SR Warehouse,Jane Smith,Packaging Tape,3,checkout,Packaging,Flower,
+2026-10-02,SR Warehouse,Jane Smith,Athena - Bloom - 25 lbs,1,checkout,Packaging,Flower,
+2026-10-05,SR Warehouse,Jane Smith,Packaging Tape,1,return,,,Unused
