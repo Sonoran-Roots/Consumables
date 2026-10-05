@@ -2,15 +2,30 @@ import { db } from "@/lib/db";
 import { parse } from "csv-parse/sync";
 import type { MaterialType, Prisma } from "@prisma/client";
 
+export type ImportSummary = {
+  newItems: number;
+  newVendors: string[];
+  rowsBySite: Record<string, number>;
+  totalValue: number;
+};
+
 export type ImportResult = {
   successCount: number;
   errorCount: number;
   errors: string[];
+  // Only set on a dry run: what a real run would create, with nothing written.
+  summary?: ImportSummary;
 };
 
 const VALID_MATERIAL_TYPES = new Set(["DM", "IM", "PM", "MM", "AFS", "NA"]);
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-export async function runInventoryImport(text: string): Promise<ImportResult> {
+export async function runInventoryImport(
+  text: string,
+  // `assumeEmptyCatalog` (dry run only) validates as if no items existed yet,
+  // for rehearsing a full cutover import before the catalog is actually cleared.
+  opts: { dryRun?: boolean; assumeEmptyCatalog?: boolean } = {}
+): Promise<ImportResult> {
   let records: Record<string, string>[];
   try {
     records = parse(text, {
@@ -30,13 +45,21 @@ export async function runInventoryImport(text: string): Promise<ImportResult> {
     return { successCount: 0, errorCount: 0, errors: ["The file has no data rows."] };
   }
 
-  const [categories, aliases, uoms, sites, existingItems] = await Promise.all([
+  const [categories, aliases, uoms, sites, existingItems, existingVendors] = await Promise.all([
     db.category.findMany(),
     db.legacyCategoryAlias.findMany(),
     db.unitOfMeasure.findMany(),
     db.site.findMany({ include: { book: true } }),
-    db.item.findMany(),
+    opts.dryRun && opts.assumeEmptyCatalog ? Promise.resolve([]) : db.item.findMany(),
+    opts.dryRun && opts.assumeEmptyCatalog ? Promise.resolve([]) : db.vendor.findMany(),
   ]);
+
+  const vendorByName = new Map(existingVendors.map((v) => [v.name.toLowerCase(), v]));
+  // Vendors named in the file that don't exist yet — created before the items
+  // that reference them. Keyed by lowercase name, value is the display name.
+  const newVendorNames = new Map<string, string>();
+  // Each new item's default vendor is the vendor of its most recently received lot.
+  const latestLotByItem = new Map<string, { date: string; vendorKey: string }>();
 
   const categoryByName = new Map(categories.map((c) => [c.name.toLowerCase(), c]));
   const categoryIdByAlias = new Map(
@@ -56,8 +79,11 @@ export async function runInventoryImport(text: string): Promise<ImportResult> {
   const validRows: {
     itemName: string;
     siteId: string;
+    siteName: string;
     quantity: number;
     unitCost: number | null;
+    vendorKey: string | null;
+    occurredAt: Date | null;
     notes: string | null;
   }[] = [];
 
@@ -104,6 +130,25 @@ export async function runInventoryImport(text: string): Promise<ImportResult> {
       return;
     }
 
+    const receivedRaw = (row.receivedDate ?? row.date ?? "").trim();
+    if (receivedRaw && !ISO_DATE.test(receivedRaw)) {
+      errors.push(`Row ${rowNum}: receivedDate "${receivedRaw}" must be YYYY-MM-DD.`);
+      return;
+    }
+
+    const vendorRaw = (row.vendor ?? "").trim();
+    const vendorKey = vendorRaw ? vendorRaw.toLowerCase() : null;
+    if (vendorKey && !vendorByName.has(vendorKey) && !newVendorNames.has(vendorKey)) {
+      newVendorNames.set(vendorKey, vendorRaw);
+    }
+    if (vendorKey) {
+      const prior = latestLotByItem.get(itemName.toLowerCase());
+      // ">=" so that among same-date (or undated) lots the later row wins.
+      if (!prior || receivedRaw >= prior.date) {
+        latestLotByItem.set(itemName.toLowerCase(), { date: receivedRaw, vendorKey });
+      }
+    }
+
     const existing = itemByName.get(itemName.toLowerCase());
     if (!existing && !newItemsToCreate.has(itemName.toLowerCase())) {
       const categoryRaw = (row.category ?? "").trim();
@@ -147,6 +192,8 @@ export async function runInventoryImport(text: string): Promise<ImportResult> {
         genericName: row.genericName?.trim() || null,
         variant: row.variant?.trim() || null,
         size: row.size?.trim() || null,
+        specialAttribute: row.specialAttribute?.trim() || null,
+        legacyId: row.legacyId?.trim() || null,
         sku: row.sku?.trim() || null,
         category: { connect: { id: category.id } },
         defaultUom: { connect: { id: uom.id } },
@@ -157,8 +204,11 @@ export async function runInventoryImport(text: string): Promise<ImportResult> {
     validRows.push({
       itemName,
       siteId: site.id,
+      siteName: site.name,
       quantity,
       unitCost,
+      vendorKey,
+      occurredAt: receivedRaw ? new Date(`${receivedRaw}T12:00:00Z`) : null,
       notes: row.notes?.trim() || null,
     });
   });
@@ -167,13 +217,42 @@ export async function runInventoryImport(text: string): Promise<ImportResult> {
     return { successCount: 0, errorCount: errors.length, errors };
   }
 
+  if (opts.dryRun) {
+    const rowsBySite: Record<string, number> = {};
+    let totalValue = 0;
+    for (const r of validRows) {
+      rowsBySite[r.siteName] = (rowsBySite[r.siteName] ?? 0) + 1;
+      totalValue += r.unitCost != null ? r.quantity * r.unitCost : 0;
+    }
+    return {
+      successCount: validRows.length,
+      errorCount: errors.length,
+      errors,
+      summary: {
+        newItems: newItemsToCreate.size,
+        newVendors: [...newVendorNames.values()],
+        rowsBySite,
+        totalValue,
+      },
+    };
+  }
+
+  // Vendors first, so new items can point at their default vendor.
+  for (const [key, name] of newVendorNames) {
+    vendorByName.set(key, await db.vendor.create({ data: { name } }));
+  }
+
   // Item creation isn't wrapped in a transaction with the ledger insert below:
   // with imports running into the hundreds of new items, a single interactive
   // transaction reliably blows Prisma's default 5s timeout. Creating an item
   // that never gets a ledger row (if this process were interrupted) is a
   // harmless, recoverable state — it just sits at zero on-hand until retried.
   for (const [nameLower, data] of newItemsToCreate) {
-    const created = await db.item.create({ data });
+    const defaultVendorKey = latestLotByItem.get(nameLower)?.vendorKey;
+    const defaultVendor = defaultVendorKey ? vendorByName.get(defaultVendorKey) : undefined;
+    const created = await db.item.create({
+      data: defaultVendor ? { ...data, defaultVendor: { connect: { id: defaultVendor.id } } } : data,
+    });
     itemByName.set(nameLower, created);
   }
 
@@ -187,6 +266,10 @@ export async function runInventoryImport(text: string): Promise<ImportResult> {
         quantity: row.quantity,
         unitCost: row.unitCost,
         totalValue: row.unitCost != null ? row.quantity * row.unitCost : null,
+        vendorId: row.vendorKey ? vendorByName.get(row.vendorKey)?.id : undefined,
+        // occurredAt orders the FIFO cost layers, so it's the lot's received
+        // date when the file has one; otherwise the column default (now).
+        ...(row.occurredAt ? { occurredAt: row.occurredAt } : {}),
         notes: row.notes,
       };
     }),
