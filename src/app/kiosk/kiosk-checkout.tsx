@@ -16,6 +16,42 @@ type CartLine = { itemId: string; name: string; quantity: number };
 type Panel = "signup" | "recovery" | null;
 
 const SITE_KEY = "kiosk-site-id";
+const MAX_QUANTITY = 999_999; // keep in step with KIOSK_MAX_QUANTITY in checkouts/actions.ts
+
+// Tap the number to type an amount (numeric keypad on tablets) — for the times
+// someone needs thousands of an item and tapping + isn't practical. While
+// editing, an empty or zero entry is simply not applied, and the field shows
+// the real quantity again once you leave it.
+function QuantityInput({
+  value,
+  onCommit,
+}: {
+  value: number;
+  onCommit: (quantity: number) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null); // null = not editing
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      pattern="[0-9]*"
+      aria-label="Quantity"
+      value={draft ?? String(value)}
+      onFocus={(e) => {
+        setDraft(String(value));
+        e.currentTarget.select();
+      }}
+      onChange={(e) => {
+        const digits = e.target.value.replace(/\D/g, "").slice(0, 6);
+        setDraft(digits);
+        const n = Math.min(Number(digits), MAX_QUANTITY);
+        if (n > 0) onCommit(n);
+      }}
+      onBlur={() => setDraft(null)}
+      className="w-24 rounded-lg border border-gray-200 bg-gray-50 py-1 text-center text-lg font-medium tabular-nums text-gray-900 focus:border-black focus:bg-white focus:outline-none"
+    />
+  );
+}
 
 export default function KioskCheckout({
   sites,
@@ -163,6 +199,10 @@ export default function KioskCheckout({
         .map((l) => (l.itemId === itemId ? { ...l, quantity: l.quantity + delta } : l))
         .filter((l) => l.quantity > 0)
     );
+  }
+
+  function setQty(itemId: string, quantity: number) {
+    setCart((prev) => prev.map((l) => (l.itemId === itemId ? { ...l, quantity } : l)));
   }
 
   function removeLine(itemId: string) {
@@ -375,9 +415,10 @@ export default function KioskCheckout({
                   >
                     −
                   </button>
-                  <span className="w-8 text-center text-lg font-medium tabular-nums">
-                    {line.quantity}
-                  </span>
+                  <QuantityInput
+                    value={line.quantity}
+                    onCommit={(n) => setQty(line.itemId, n)}
+                  />
                   <button
                     type="button"
                     onClick={() => updateQty(line.itemId, 1)}

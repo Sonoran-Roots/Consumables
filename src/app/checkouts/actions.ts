@@ -224,6 +224,8 @@ export type KioskCheckoutState =
 // passed in. Whoever's PIN is entered when they tap "Log checkout" IS the
 // employee the log is assigned to. Returns a result instead of redirecting
 // so the kiosk stays on-screen for the next person.
+const KIOSK_MAX_QUANTITY = 999_999;
+
 export async function logKioskCheckout(input: {
   siteId: string;
   isReturn: boolean;
@@ -235,6 +237,13 @@ export async function logKioskCheckout(input: {
   const lines = input.lines.filter((l) => l.itemId && l.quantity > 0);
   if (!input.siteId) return { ok: false, error: "Pick a site first." };
   if (lines.length === 0) return { ok: false, error: "Add at least one item first." };
+  // Quantities can be typed on the kiosk, so don't trust the client's number.
+  if (lines.some((l) => !Number.isInteger(l.quantity) || l.quantity > KIOSK_MAX_QUANTITY)) {
+    return {
+      ok: false,
+      error: `Quantities must be whole numbers up to ${KIOSK_MAX_QUANTITY.toLocaleString("en-US")}.`,
+    };
+  }
 
   const employee = await findEmployeeByPin(input.pin);
   if (!employee) return { ok: false, error: "PIN not recognized." };
