@@ -115,7 +115,12 @@ export function decideAccess(
 // findings but doesn't enter them; an auditor enters them but isn't someone
 // findings get routed to), so each route lists exactly which roles may open
 // it. Longest matching prefix wins; anything unlisted is open to all three.
-const AUDIT_ROUTE_ROLES: { prefix: string; roles: AuditRole[] }[] = [];
+const AUDIT_ROUTE_ROLES: { prefix: string; roles: AuditRole[] }[] = [
+  { prefix: `${AUDIT_PREFIX}/settings`, roles: ["ADMIN"] },
+  { prefix: `${AUDIT_PREFIX}/upload`, roles: ["AUDITOR", "ADMIN"] },
+  { prefix: `${AUDIT_PREFIX}/findings/new`, roles: ["AUDITOR", "ADMIN"] },
+  { prefix: `${AUDIT_PREFIX}/edit`, roles: ["AUDITOR", "ADMIN"] },
+];
 
 export function auditRolesAllowedFor(pathname: string): AuditRole[] {
   const match = AUDIT_ROUTE_ROLES.filter(

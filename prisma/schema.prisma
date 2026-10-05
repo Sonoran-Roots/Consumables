@@ -57,12 +57,12 @@ enum SiteType {
 }
 
 model Employee {
-  id       String    @id @default(cuid())
-  name     String
-  initials String? // for mapping legacy "who did this" data
-  site     Site?     @relation(fields: [siteId], references: [id])
-  siteId   String?
-  isActive Boolean   @default(true)
+  id        String    @id @default(cuid())
+  name      String
+  initials  String? // for mapping legacy "who did this" data
+  site      Site?     @relation(fields: [siteId], references: [id])
+  siteId    String?
+  isActive  Boolean   @default(true)
   // Kiosk PIN, stored only as a keyed digest (HMAC, see src/lib/pin.ts).
   // The PIN IS the kiosk identity: the checkout screen has no name picker,
   // it looks the employee up by digest when the PIN is entered — which is
@@ -71,13 +71,13 @@ model Employee {
   // Null = not set up yet (set at the kiosk via "Forgot your PIN?", or at
   // sign-up for app users). Self-serve by design: an admin can only clear
   // it from the employee edit page, never set/view its value.
-  pinDigest String? @unique
+  pinDigest String?   @unique
   // Kiosk-only authority: a MANAGER/ADMIN employee can approve clearing a
   // coworker's forgotten PIN right at the kiosk (their own PIN + this role
   // is the check — see approveKioskPinReset). Unrelated to User.role below,
   // which gates the desktop app instead; most employees have no User
   // account at all, so this has to live on Employee, not User.
-  role     StaffRole @default(USER)
+  role      StaffRole @default(USER)
   // The Better Auth login (User below) behind this person, if any. An app
   // user and a kiosk user are the same person: signing up for the app creates
   // the Employee (and its PIN) in the same step, so every personal login has
@@ -86,8 +86,8 @@ model Employee {
   // location-signed-in tablet accounts themselves. SetNull rather than
   // cascade: deleting someone's login shouldn't delete their employment
   // record, just their app access.
-  user     User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
-  userId   String?   @unique
+  user      User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId    String?   @unique
 
   inventoryTransactions InventoryTransaction[]
   transfersRequested    Transfer[]                @relation("TransferRequestedBy")
@@ -602,8 +602,8 @@ model User {
   // only by an admin via /users). isPurchasingTeam is the hard gate: false
   // means every desktop-app route redirects to /kiosk regardless of role.
   // role only matters once isPurchasingTeam is true.
-  role             StaffRole @default(USER)
-  isPurchasingTeam Boolean   @default(false)
+  role             StaffRole  @default(USER)
+  isPurchasingTeam Boolean    @default(false)
   // Access to the separate Inventory Audit module (/inventory-audit). Null =
   // no access. Independent of role/isPurchasingTeam above, which are this
   // user's access to the Consumable Management module. Also carried in the
@@ -616,6 +616,13 @@ model User {
   // location-signed-in kiosk tablet accounts, which are Users but not a
   // person.
   employee Employee?
+
+  // Inventory Audit module (Ia* models below) — people on findings.
+  iaFindingsAssigned IaFinding[]      @relation("IaFindingAssignee")
+  iaFindingsCreated  IaFinding[]      @relation("IaFindingCreator")
+  iaFindingsResolved IaFinding[]      @relation("IaFindingResolver")
+  iaFindingsVerified IaFinding[]      @relation("IaFindingVerifier")
+  iaFindingEvents    IaFindingEvent[]
 }
 
 model Session {
@@ -654,4 +661,157 @@ model Verification {
   expiresAt  DateTime
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+}
+
+// =============================================================================
+// Inventory Audit module — completely separate from Consumable Management.
+// Only User (logins/access) is shared. Everything here is prefixed `Ia` because
+// the consumables side already has its own Audit / AuditStatus models.
+// =============================================================================
+
+enum IaAuditType {
+  PRODUCT // system count vs physical count of product lines
+  WASTE_LOG // waste log vs physical disposal
+  PLANT // plant-room counts (mother, veg, flower, ...)
+}
+
+// Open -> Notified (department told) -> Resolved (dept manager confirms the
+// fix) -> Verified (inventory team confirms). Reopening goes back to Open.
+enum IaFindingStatus {
+  OPEN
+  NOTIFIED
+  RESOLVED
+  VERIFIED
+}
+
+// Where an audit happened. `aliases` are other spellings found in the old
+// trackers ("McDowell - Hub"), so uploads match without hand-editing.
+model IaFacility {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  aliases   String[] @default([])
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  findings IaFinding[]
+}
+
+// The department a finding is attributed to (who has to fix it).
+model IaDepartment {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  aliases   String[] @default([])
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  findings       IaFinding[] @relation("IaFindingDept")
+  findingsSecond IaFinding[] @relation("IaFindingDept2")
+}
+
+// e.g. "Internal Process", "AZDHS Compliance". defaultDueDays sets a finding's
+// due date from its audit date (null = no automatic due date).
+model IaFindingType {
+  id             String   @id @default(cuid())
+  name           String   @unique
+  aliases        String[] @default([]) // e.g. "Compliance (AZDHS)" as written in the Key tab
+  defaultDueDays Int?
+  isActive       Boolean  @default(true)
+  sortOrder      Int      @default(0)
+
+  findings   IaFinding[]
+  categories IaFindingCategory[]
+}
+
+// The standard kinds of finding from the tracker's Key tab ("Wrong room - Needs
+// updating", "Unlabeled product", ...). Each one implies an impact level (the
+// finding type: AZDHS Compliance or Internal Process), so picking a category
+// pre-fills the type.
+model IaFindingCategory {
+  id            String        @id @default(cuid())
+  name          String        @unique
+  findingType   IaFindingType @relation(fields: [findingTypeId], references: [id])
+  findingTypeId String
+  isActive      Boolean       @default(true)
+  sortOrder     Int           @default(0)
+
+  findings IaFinding[]
+}
+
+model IaFinding {
+  id        String      @id @default(cuid())
+  auditType IaAuditType
+  auditDate DateTime
+  auditors  String? // initials as written on the tracker, e.g. "MS/TL/KW"
+
+  facility           IaFacility         @relation(fields: [facilityId], references: [id])
+  facilityId         String
+  findingType        IaFindingType      @relation(fields: [findingTypeId], references: [id])
+  findingTypeId      String
+  category           IaFindingCategory? @relation(fields: [categoryId], references: [id])
+  categoryId         String?
+  department         IaDepartment       @relation("IaFindingDept", fields: [departmentId], references: [id])
+  departmentId       String
+  secondDepartment   IaDepartment?      @relation("IaFindingDept2", fields: [secondDepartmentId], references: [id])
+  secondDepartmentId String?
+
+  description String // the initial discrepancy finding
+
+  // What was audited — which of these apply depends on auditType.
+  product      String?
+  batchId      String?
+  pid          String?
+  strain       String?
+  quantity     Float?
+  unit         String?
+  room         String? // plant audits
+  serialNo     String? // plant audits
+  reference    String? // waste log reference # on the written log
+  weightGrams  Float? // waste log
+  disposalDate DateTime? // waste log
+
+  correction      String?
+  monitoringNotes String?
+
+  status          IaFindingStatus @default(OPEN)
+  dueDate         DateTime?
+  notifiedAt      DateTime?
+  resolvedAt      DateTime?
+  verifiedAt      DateTime?
+  resolutionNotes String?
+
+  assignedTo   User?   @relation("IaFindingAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  assignedToId String?
+  createdBy    User?   @relation("IaFindingCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById  String?
+  resolvedBy   User?   @relation("IaFindingResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  resolvedById String?
+  verifiedBy   User?   @relation("IaFindingVerifier", fields: [verifiedById], references: [id], onDelete: SetNull)
+  verifiedById String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events IaFindingEvent[]
+
+  @@index([status])
+  @@index([facilityId])
+  @@index([departmentId])
+  @@index([dueDate])
+  @@index([auditDate])
+}
+
+// The history of a finding: creation, status changes, notes, assignment.
+model IaFindingEvent {
+  id         String           @id @default(cuid())
+  finding    IaFinding        @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  findingId  String
+  at         DateTime         @default(now())
+  actor      User?            @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorId    String?
+  kind       String // CREATED | STATUS | NOTE | ASSIGNED | EDITED
+  fromStatus IaFindingStatus?
+  toStatus   IaFindingStatus?
+  note       String?
+
+  @@index([findingId, at])
 }

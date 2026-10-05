@@ -3,14 +3,20 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "@/lib/auth-client";
-import { AUDIT_PREFIX, modulesFor } from "@/lib/access";
+import { AUDIT_PREFIX, auditRolesAllowedFor, isAuditRole, modulesFor } from "@/lib/access";
 import JarsLogo from "./jars-logo";
 
 // The Inventory Audit module's own navigation. Deliberately does not import
 // or reuse the Consumable Management sidebar — the two modules only share
 // logins and the admin console.
 type Leaf = { href: string; label: string };
-const LINKS: Leaf[] = [{ href: AUDIT_PREFIX, label: "Dashboard" }];
+const LINKS: Leaf[] = [
+  { href: AUDIT_PREFIX, label: "Dashboard" },
+  { href: `${AUDIT_PREFIX}/findings`, label: "Findings" },
+  { href: `${AUDIT_PREFIX}/findings/new`, label: "Add finding" },
+  { href: `${AUDIT_PREFIX}/upload`, label: "Upload findings" },
+  { href: `${AUDIT_PREFIX}/settings`, label: "Settings" },
+];
 
 export default function AuditSidebar() {
   const pathname = usePathname();
@@ -38,8 +44,12 @@ export default function AuditSidebar() {
       </div>
 
       <div className="flex-1 overflow-y-auto py-2">
-        {LINKS.map((leaf) => {
-          const active = leaf.href === AUDIT_PREFIX ? pathname === leaf.href : pathname.startsWith(leaf.href);
+        {LINKS.filter((leaf) => isAuditRole(user?.auditRole) && auditRolesAllowedFor(leaf.href).includes(user!.auditRole as never)).map((leaf) => {
+          // "Findings" must not light up while on "Add finding".
+          const active =
+            leaf.href === AUDIT_PREFIX || leaf.href === `${AUDIT_PREFIX}/findings`
+              ? pathname === leaf.href || (leaf.href !== AUDIT_PREFIX && pathname.startsWith(leaf.href + "/") && !pathname.startsWith(`${AUDIT_PREFIX}/findings/new`))
+              : pathname.startsWith(leaf.href);
           return (
             <Link
               key={leaf.href}

@@ -1,0 +1,4 @@
+Date,Auditor Initials,Product,Batch,PID,Qty (Inc. allocated),Unit,Discrepancy Found,Finding Type,Initial Discrepancy Finding,Dept. 1,Dept. 2,Facility,Correction,Monitoring Action: Teams Notified,Additional Monitoring Action Notes,Resolution Confirmed,Resolution Date,Verified By Inventory
+2026-09-14,MS/TL/KW,Canamo Shatter 3g Cherry Inferno,CAN250901-004,SPO-MANU-01234,250,qty,TRUE,Internal Process,PIDs need flip flopped on IOCs,Fulfillment,,McDowell Distro,,FALSE,,FALSE,,FALSE
+2026-09-14,AG,Wyld One 100mg Gummy Sour Peach,AZ PM B122,402100825,1500,qty,TRUE,AZDHS Compliance,Missing harvest date,Intake,Sales Administration,McDowell Hub,,TRUE,Emailed Intake lead,FALSE,,FALSE
+2026-09-14,AG,Wyld One 100mg Gummy Blue Raz,AZ PM B130,402100830,900,qty,FALSE,,,,,McDowell Hub,,FALSE,,FALSE,,FALSE
