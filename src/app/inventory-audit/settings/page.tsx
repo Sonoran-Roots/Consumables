@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { auditRoleLabel } from "@/lib/access";
 import { TEMPLATE_PLACEHOLDERS } from "@/lib/ia/email";
-import { addCoverage, removeCoverage, saveCategory, saveDepartment, saveEmailTemplate, saveFacility, saveFindingType } from "./actions";
+import { addCoverage, removeCoverage, saveReason, saveCategory, saveDepartment, saveEmailTemplate, saveFacility, saveFindingType } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +42,7 @@ function NamedSection({ title, help, rows, action, noun }: {
 export default async function SettingsPage({ searchParams }: PageProps<"/inventory-audit/settings">) {
   const sp = await searchParams;
   const error = Array.isArray(sp.error) ? sp.error[0] : sp.error;
-  const [facilities, departments, types, categories, managers, coverage, templates] = await Promise.all([
+  const [facilities, departments, types, categories, managers, coverage, templates, reasons] = await Promise.all([
     db.iaFacility.findMany({ orderBy: { name: "asc" } }),
     db.iaDepartment.findMany({ orderBy: { name: "asc" } }),
     db.iaFindingType.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
@@ -50,6 +50,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/invento
     db.user.findMany({ where: { auditRole: { in: ["MANAGER", "ADMIN"] } }, orderBy: { name: "asc" }, select: { id: true, name: true, email: true, auditRole: true } }),
     db.iaCoverage.findMany({ include: { facility: true, department: true }, orderBy: { createdAt: "asc" } }),
     db.iaEmailTemplate.findMany({ where: { id: { in: ["default", "reminder"] } } }),
+    db.iaAdjustmentReason.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
   ]);
 
   return (
@@ -134,6 +135,34 @@ export default async function SettingsPage({ searchParams }: PageProps<"/invento
               {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
             <button className={save}>Add category</button>
+          </form>
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-gray-200 bg-white p-5">
+        <h2 className="text-sm font-medium text-gray-700">Adjustment reasons</h2>
+        <p className="mt-1 text-xs text-gray-500">
+          The reasons chosen when a quantity is adjusted — the same list kept in Dutchie. These appear on quantity findings and
+          the adjustments report, and a completed Dutchie audit table is matched to them by name. Deactivating a reason hides it
+          from new choices; findings that already use it keep it.
+        </p>
+        <div className="mt-3 space-y-2">
+          {reasons.map((r) => (
+            <form key={r.id} action={saveReason} className="flex flex-wrap items-center gap-2">
+              <input type="hidden" name="id" value={r.id} />
+              <input name="name" defaultValue={r.name} required className={`${box} w-72`} aria-label="Reason" />
+              <label className="flex items-center gap-1 text-xs text-gray-600">
+                Order <input name="sortOrder" type="number" defaultValue={r.sortOrder} className={`${box} w-16`} aria-label="Sort order" />
+              </label>
+              <label className="flex items-center gap-1 text-xs text-gray-600">
+                <input type="checkbox" name="isActive" defaultChecked={r.isActive} /> Active
+              </label>
+              <button className={save}>Save</button>
+            </form>
+          ))}
+          <form action={saveReason} className="flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3">
+            <input name="name" required placeholder="New reason" className={`${box} w-72`} aria-label="New reason" />
+            <button className={save}>Add reason</button>
           </form>
         </div>
       </section>

@@ -8,7 +8,7 @@ const btn = "rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font
 const primary = "rounded-md border border-black bg-black px-3 py-1.5 text-sm font-medium text-white hover:bg-white hover:text-black disabled:opacity-50";
 
 export default function AuditControls({
-  auditId, status, pending, canRun, canDelete, exportHref,
+  auditId, status, pending, canRun, canDelete, exportHref, dutchieExportHref,
 }: {
   auditId: string;
   status: "IN_PROGRESS" | "COMPLETED";
@@ -16,6 +16,7 @@ export default function AuditControls({
   canRun: boolean; // an audit manager: complete / reopen
   canDelete: boolean; // an admin
   exportHref: string;
+  dutchieExportHref: string;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -52,6 +53,7 @@ export default function AuditControls({
   return (
     <div className="flex flex-wrap items-center gap-2">
       <a href={exportHref} className={btn}>Download CSV</a>
+      <a href={dutchieExportHref} className={btn} title="The counts and reasons in the same table format Dutchie uses">Dutchie table</a>
       {status === "IN_PROGRESS" && canRun && (
         <button type="button" disabled={busy} className={primary} onClick={complete}>
           {pending > 0 ? "Complete audit…" : "Complete audit"}

@@ -11,6 +11,7 @@ import StatusBadge from "../../_components/status-badge";
 import AuditBoard from "./audit-board";
 import AuditControls from "./audit-controls";
 import ScanButton from "./scan-button";
+import CountsUpload from "./counts-upload";
 
 export const dynamic = "force-dynamic";
 const PAGE_SIZE = 100;
@@ -161,7 +162,7 @@ export default async function AuditPage({ params, searchParams }: PageProps<"/in
         <div className="min-w-0">
           <h1 className="text-xl font-semibold text-gray-900">{audit.name}</h1>
           <p className="mt-1 text-sm text-gray-500">
-            {audit.facility.name} · {formatDate(audit.auditDate)}
+            {audit.facility.name}{audit.dutchieType ? ` · ${audit.dutchieType.charAt(0) + audit.dutchieType.slice(1).toLowerCase()} audit` : ""} · {formatDate(audit.auditDate)}
             {audit.auditors ? ` · ${audit.auditors}` : ""}
             {audit.defaultDepartment ? ` · findings to ${audit.defaultDepartment.name}` : ""}
           </p>
@@ -177,6 +178,7 @@ export default async function AuditPage({ params, searchParams }: PageProps<"/in
           auditId={id} status={audit.status} pending={stats.pending}
           canRun={canRun} canDelete={CAN_CONFIGURE.includes(me.role)}
           exportHref={`/inventory-audit/audits/${id}/export`}
+          dutchieExportHref={`/inventory-audit/audits/${id}/export?format=dutchie`}
         />
       </div>
 
@@ -204,6 +206,8 @@ export default async function AuditPage({ params, searchParams }: PageProps<"/in
           </Link>
         </div>
       )}
+
+      {canRun && canEdit && <div className="mt-4"><CountsUpload auditId={id} /></div>}
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         {tab("pending", "Pending", stats.pending)}

@@ -51,6 +51,20 @@ export async function saveDepartment(formData: FormData) {
   return done();
 }
 
+export async function saveReason(formData: FormData) {
+  await guard();
+  const id = text(formData, "id"), name = text(formData, "name");
+  if (!name) return done("A reason needs a name.");
+  const data = { name, sortOrder: Number(text(formData, "sortOrder")) || 0, isActive: formData.get("isActive") === "on" || !id };
+  try {
+    if (id) await db.iaAdjustmentReason.update({ where: { id }, data });
+    else await db.iaAdjustmentReason.create({ data });
+  } catch (e) {
+    return done(isUnique(e) ? `A reason named "${name}" already exists.` : "Couldn't save that reason.");
+  }
+  return done();
+}
+
 export async function saveCategory(formData: FormData) {
   await guard();
   const id = text(formData, "id"), name = text(formData, "name"), findingTypeId = text(formData, "findingTypeId");

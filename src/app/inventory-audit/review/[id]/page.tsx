@@ -117,6 +117,14 @@ export default async function ReviewPage({ params, searchParams }: PageProps<"/i
                   <option value="no">Not needed</option>
                 </select>
               </label>
+              {f.flaggedField === "COUNT" && (
+                <label className="text-xs text-gray-500">Adjustment reason
+                  <select name="adjustmentReasonId" defaultValue={f.adjustmentReasonId ?? ""} className={`${box} mt-0.5 block`}>
+                    <option value="">No reason yet</option>
+                    {opts.reasons.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                  </select>
+                </label>
+              )}
               <label className="text-xs text-gray-500">Fix in
                 <select name="adjustmentTarget" defaultValue={f.adjustmentTarget ?? defaultTarget(f.flaggedField)} className={`${box} mt-0.5 block`}>
                   <option value="SYSTEM">Dutchie</option>

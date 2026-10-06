@@ -8,6 +8,7 @@ import { getAuditSession } from "@/lib/ia/auth";
 import { parseFlexibleDate } from "@/lib/ia/dates";
 import { MAX_FILE_BYTES } from "@/lib/ia/csv";
 import { parseAuditLines } from "@/lib/ia/audit-import";
+import { applyCompletedCounts, type CountsResult } from "@/lib/ia/audit-counts";
 import { completeAudit, recordLine, reopenAudit, type RecordInput, type RecordResult } from "@/lib/ia/audits";
 import { CAN_CONFIGURE, CAN_ENTER_FINDINGS, CAN_RUN_AUDITS } from "@/lib/ia/workflow";
 
@@ -40,6 +41,7 @@ export async function createAudit(_prev: NewAuditState, formData: FormData): Pro
   const audit = await db.iaAudit.create({
     data: {
       name, auditType: "PRODUCT" as IaAuditType, auditDate, facilityId, defaultDepartmentId: departmentId,
+      dutchieType: ["RETAIL", "PRODUCTION", "DISTRIBUTION"].includes(String(formData.get("dutchieType"))) ? String(formData.get("dutchieType")) : null,
       auditors: text(formData, "auditors"), notes: text(formData, "notes"), sourceFile: file.name.slice(0, 200), createdById: me.userId,
     },
     select: { id: true },
@@ -85,4 +87,27 @@ export async function deleteAudit(auditId: string): Promise<{ ok: true } | { ok:
   await db.iaAudit.deleteMany({ where: { id: auditId } });
   revalidatePath("/inventory-audit", "layout");
   return { ok: true };
+}
+
+export type CountsState = CountsResult | null;
+
+// The completed Dutchie audit table (counts, times, notes, adjustment reasons)
+// applied to an audit that was started from the initial table.
+export async function loadCompletedCounts(_prev: CountsState, formData: FormData): Promise<CountsState> {
+  const checkOnly = formData.get("checkOnly") === "on";
+  const empty = (message: string): CountsResult => ({ checkOnly, matched: 0, countedOk: 0, discrepancies: 0, leftPending: 0, skippedAlreadyCounted: 0, expectedDiffers: 0, errors: [message], notes: [] });
+  const me = await getAuditSession(CAN_RUN_AUDITS);
+  if (!me) return empty("Only an audit manager can load counts from Dutchie.");
+  const auditId = String(formData.get("auditId") ?? "");
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) return empty("Please choose the completed Dutchie audit table (CSV).");
+  if (file.size > MAX_FILE_BYTES) return empty("That file is over 3.8 MB.");
+
+  const result = await applyCompletedCounts(
+    auditId, await file.text(),
+    { countUnchanged: formData.get("countUnchanged") === "on", alreadyAdjusted: formData.get("alreadyAdjusted") === "on", checkOnly },
+    { userId: me.userId }
+  );
+  if (!checkOnly) revalidatePath("/inventory-audit", "layout");
+  return result;
 }

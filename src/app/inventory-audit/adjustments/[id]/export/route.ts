@@ -21,16 +21,17 @@ export async function GET(request: Request, ctx: RouteContext<"/inventory-audit/
     include: {
       auditLine: { select: { position: true, product: true, strain: true, batchId: true, pid: true, serialNo: true, room: true } },
       assignedTo: { select: { name: true, email: true } },
+      adjustmentReason: { select: { name: true } },
     },
   });
-  const header = ["Item", "Package ID (PID)", "Batch", "Room", "Field", "System value", "Found value", "Adjustment needed", "Fix in", "Status", "Done on", "Owner", "Found at", "Notes"];
+  const header = ["Item", "Package ID (PID)", "Batch", "Room", "Field", "System value", "Found value", "Adjustment needed", "Adjustment reason", "Fix in", "Status", "Done on", "Owner", "Found at", "Notes"];
   const rows = findings.map((f) => {
     const target = f.adjustmentTarget ?? defaultTarget(f.flaggedField);
     return [
       f.auditLine ? lineLabel(f.auditLine) : "", f.auditLine?.pid, f.auditLine?.batchId, f.auditLine?.room, fieldLabel(f.flaggedField),
       f.systemValue, f.foundValue,
       describeAdjustment({ flaggedField: f.flaggedField, systemValue: f.systemValue, foundValue: f.foundValue, unit: f.unit, target }),
-      TARGET[target], f.adjustmentStatus === "APPLIED" ? "Done" : "To do", toDateInput(f.adjustedAt),
+      f.adjustmentReason?.name ?? "", TARGET[target], f.adjustmentStatus === "APPLIED" ? "Done" : "To do", toDateInput(f.adjustedAt),
       f.assignedTo ? f.assignedTo.name || f.assignedTo.email : "", f.foundAt.toISOString(), f.monitoringNotes,
     ].map(cell).join(",");
   });

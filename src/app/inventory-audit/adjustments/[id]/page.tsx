@@ -31,6 +31,7 @@ export default async function AdjustmentsPage({ params, searchParams }: PageProp
     include: {
       auditLine: { select: { position: true, product: true, strain: true, batchId: true, pid: true, serialNo: true, room: true } },
       assignedTo: { select: { name: true, email: true } },
+      adjustmentReason: { select: { name: true } },
     },
   });
 
@@ -93,7 +94,7 @@ export default async function AdjustmentsPage({ params, searchParams }: PageProp
       <div className="mt-4 overflow-x-auto rounded-lg border border-gray-200 bg-white">
         <table className="min-w-full divide-y divide-gray-200 text-sm">
           <thead className="bg-gray-50">
-            <tr>{["Item", "What to change", "Fix in", "Owner", "Status"].map((h) => <th key={h} className="px-3 py-2 text-left font-medium text-gray-500">{h}</th>)}</tr>
+            <tr>{["Item", "What to change", "Reason", "Fix in", "Owner", "Status"].map((h) => <th key={h} className="px-3 py-2 text-left font-medium text-gray-500">{h}</th>)}</tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {findings.map((f) => {
@@ -109,6 +110,7 @@ export default async function AdjustmentsPage({ params, searchParams }: PageProp
                     <p className="text-gray-900">{describeAdjustment({ flaggedField: f.flaggedField, systemValue: f.systemValue, foundValue: f.foundValue, unit: f.unit, target })}</p>
                     {f.monitoringNotes && <p className="mt-0.5 text-xs text-gray-500">“{f.monitoringNotes}”</p>}
                   </td>
+                  <td className="whitespace-nowrap px-3 py-2 text-gray-600">{f.flaggedField === "COUNT" ? (f.adjustmentReason?.name ?? <span className="text-amber-700">Needs a reason</span>) : "—"}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-gray-600">{TARGET[target]}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-gray-600">{f.assignedTo ? f.assignedTo.name || f.assignedTo.email : "—"}</td>
                   <td className="whitespace-nowrap px-3 py-2">
@@ -134,7 +136,7 @@ export default async function AdjustmentsPage({ params, searchParams }: PageProp
               );
             })}
             {findings.length === 0 && (
-              <tr><td colSpan={5} className="px-4 py-10 text-center text-gray-400">{show === "open" ? "No adjustments left to make." : "No adjustments for this audit."}</td></tr>
+              <tr><td colSpan={6} className="px-4 py-10 text-center text-gray-400">{show === "open" ? "No adjustments left to make." : "No adjustments for this audit."}</td></tr>
             )}
           </tbody>
         </table>

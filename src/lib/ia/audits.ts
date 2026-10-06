@@ -194,6 +194,7 @@ export type ReviewPatch = {
   dueDate?: Date | null;
   adjustmentTarget?: IaAdjustmentTarget | null;
   adjustmentStatus?: "PENDING" | "NOT_NEEDED";
+  adjustmentReasonId?: string | null;
   markReviewed?: boolean;
 };
 
@@ -229,6 +230,14 @@ export async function reviewFinding(findingId: string, patch: ReviewPatch, actor
   if (patch.dueDate !== undefined) data.dueDate = patch.dueDate;
   if (patch.adjustmentTarget !== undefined) data.adjustmentTarget = patch.adjustmentTarget;
   if (patch.adjustmentStatus && f.adjustmentStatus !== "APPLIED") data.adjustmentStatus = patch.adjustmentStatus;
+  if (patch.adjustmentReasonId !== undefined) {
+    if (patch.adjustmentReasonId) {
+      const reason = await db.iaAdjustmentReason.findUnique({ where: { id: patch.adjustmentReasonId } });
+      if (!reason) return { ok: false, error: "That adjustment reason doesn't exist." };
+      notes.push(`reason: ${reason.name}`);
+    }
+    data.adjustmentReasonId = patch.adjustmentReasonId;
+  }
   if (patch.markReviewed) {
     data.needsReview = false;
     data.reviewedAt = new Date();

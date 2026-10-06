@@ -824,12 +824,14 @@ model IaFinding {
   reviewedById String?
 
   // What has to change as a result, and whether it has been done.
-  adjustmentStatus IaAdjustmentStatus  @default(NOT_NEEDED)
-  adjustmentTarget IaAdjustmentTarget?
-  adjustmentNote   String?
-  adjustedAt       DateTime?
-  adjustedBy       User?               @relation("IaFindingAdjuster", fields: [adjustedById], references: [id], onDelete: SetNull)
-  adjustedById     String?
+  adjustmentStatus   IaAdjustmentStatus  @default(NOT_NEEDED)
+  adjustmentTarget   IaAdjustmentTarget?
+  adjustmentNote     String?
+  adjustmentReason   IaAdjustmentReason? @relation(fields: [adjustmentReasonId], references: [id], onDelete: SetNull)
+  adjustmentReasonId String?
+  adjustedAt         DateTime?
+  adjustedBy         User?               @relation("IaFindingAdjuster", fields: [adjustedById], references: [id], onDelete: SetNull)
+  adjustedById       String?
 
   @@index([auditId])
   @@index([auditLineId])
@@ -901,13 +903,14 @@ enum IaLineStatus {
 // uploaded, then counted line by line, with discrepancies documented as
 // findings while the audit is still open.
 model IaAudit {
-  id         String      @id @default(cuid())
-  name       String
-  auditType  IaAuditType
-  auditDate  DateTime
-  auditors   String? // initials / names of the team, as on the tracker
-  notes      String?
-  sourceFile String?
+  id          String      @id @default(cuid())
+  name        String
+  auditType   IaAuditType
+  auditDate   DateTime
+  auditors    String? // initials / names of the team, as on the tracker
+  notes       String?
+  sourceFile  String?
+  dutchieType String? // RETAIL, PRODUCTION or DISTRIBUTION: the kind of audit started in Dutchie
 
   facility            IaFacility    @relation(fields: [facilityId], references: [id])
   facilityId          String
@@ -946,6 +949,8 @@ model IaAuditLine {
   serialNo        String?
   unit            String?
   category        String? // the product's own category (Edible Gummies, ...), not a finding category
+  dutchieId       String? // the row's Id in Dutchie's audit table, used to match a completed table back to the line
+  brand           String?
   // Label details from the Dutchie export, shown to the auditor to check against the label.
   itemStatus      String?
   harvestDate     String?
@@ -972,6 +977,7 @@ model IaAuditLine {
   @@index([auditId, status])
   @@index([auditId, room])
   @@index([auditId, position])
+  @@index([auditId, dutchieId])
 }
 
 enum IaAdjustmentStatus {
@@ -985,4 +991,16 @@ enum IaAdjustmentTarget {
   SYSTEM // fix it in Dutchie
   LABEL // fix the label / the product
   BOTH
+}
+
+// The reasons staff pick when adjusting a quantity (the list kept in Dutchie:
+// "Inventory Reconciliation", "Theft", "Damaged", ...). Managed by an admin in
+// the module's settings and attached to quantity findings and adjustments.
+model IaAdjustmentReason {
+  id        String  @id @default(cuid())
+  name      String  @unique
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  findings IaFinding[]
 }

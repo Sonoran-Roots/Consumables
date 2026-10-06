@@ -33,6 +33,7 @@ export async function saveReview(formData: FormData) {
       dueDate: dueRaw ? parseFlexibleDate(dueRaw) : null,
       adjustmentTarget: (["SYSTEM", "LABEL", "BOTH"].includes(target) ? target : null) as IaAdjustmentTarget | null,
       adjustmentStatus: text(formData, "adjustmentNeeded") === "no" ? "NOT_NEEDED" : "PENDING",
+      adjustmentReasonId: formData.has("adjustmentReasonId") ? text(formData, "adjustmentReasonId") || null : undefined,
       markReviewed: true,
     },
     { userId: me.userId }

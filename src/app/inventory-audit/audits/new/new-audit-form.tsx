@@ -18,6 +18,15 @@ export default function NewAuditForm({ facilities, departments, today }: { facil
       </div>
       <div className="grid gap-4 sm:grid-cols-3">
         <div>
+          <label className={label}>Dutchie audit type</label>
+          <select name="dutchieType" defaultValue="" className={input}>
+            <option value="">Not specified</option>
+            <option value="RETAIL">Retail</option>
+            <option value="PRODUCTION">Production</option>
+            <option value="DISTRIBUTION">Distribution</option>
+          </select>
+        </div>
+        <div>
           <label className={label}>Location *</label>
           <select name="facilityId" required defaultValue="" className={input}>
             <option value="" disabled>Select…</option>

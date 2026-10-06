@@ -2,16 +2,40 @@ import { db } from "@/lib/db";
 import { getAuditSession } from "@/lib/ia/auth";
 import { csvCell as cell } from "@/lib/ia/csv";
 import { toDateInput } from "@/lib/ia/dates";
+import { buildDutchieTable } from "@/lib/ia/audit-export";
 import { fieldLabel } from "@/lib/ia/audit-rules";
 import { CAN_ENTER_FINDINGS } from "@/lib/ia/workflow";
 
 // Everything audited, line by line: the system's details, what was counted, who
 // counted it and when, whether the label was verified, and what was flagged.
-export async function GET(_request: Request, ctx: RouteContext<"/inventory-audit/audits/[id]/export">) {
+export async function GET(request: Request, ctx: RouteContext<"/inventory-audit/audits/[id]/export">) {
   if (!(await getAuditSession(CAN_ENTER_FINDINGS))) return new Response("Forbidden", { status: 403 });
   const { id } = await ctx.params;
   const audit = await db.iaAudit.findUnique({ where: { id }, include: { facility: true } });
   if (!audit) return new Response("Not found", { status: 404 });
+
+  const slugOf = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "audit";
+
+  // Dutchie's own audit table: the same columns it exports, filled from this audit.
+  if (new URL(request.url).searchParams.get("format") === "dutchie") {
+    const rows = await db.iaAuditLine.findMany({
+      where: { auditId: id }, orderBy: { position: "asc" },
+      include: { findings: { where: { flaggedField: "COUNT" }, select: { foundAt: true, adjustmentReason: { select: { name: true } } } } },
+    });
+    const table = buildDutchieTable(
+      rows.map((l) => ({
+        dutchieId: l.dutchieId, pid: l.pid, brand: l.brand, product: l.product, systemQty: l.systemQty, actualQty: l.actualQty, note: l.note, countedAt: l.countedAt,
+        countFinding: l.findings[0] ? { foundAt: l.findings[0].foundAt, reasonName: l.findings[0].adjustmentReason?.name ?? null } : null,
+      }))
+    );
+    return new Response(table, {
+      headers: {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="dutchie-audit-${slugOf(audit.name)}-${toDateInput(audit.auditDate)}.csv"`,
+        "Cache-Control": "no-store",
+      },
+    });
+  }
 
   const lines = await db.iaAuditLine.findMany({
     where: { auditId: id }, orderBy: { position: "asc" },
