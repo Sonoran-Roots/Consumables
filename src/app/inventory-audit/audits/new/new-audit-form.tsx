@@ -19,10 +19,10 @@ export default function NewAuditForm({ facilities, departments, today }: { facil
       <div className="grid gap-4 sm:grid-cols-3">
         <div>
           <label className={label}>Audit type *</label>
+          {/* Product inventory audits only for now. Plant-room audits (Clone, VEG, Flower)
+              and waste-log audits will be added later; the audit code already supports them. */}
           <select name="auditType" defaultValue="PRODUCT" className={input}>
-            <option value="PRODUCT">Product audit</option>
-            <option value="PLANT">Plant room audit</option>
-            <option value="WASTE_LOG">Waste log audit</option>
+            <option value="PRODUCT">Product inventory audit</option>
           </select>
         </div>
         <div>
