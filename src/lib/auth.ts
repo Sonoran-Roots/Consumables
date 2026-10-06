@@ -23,7 +23,18 @@ export const auth = betterAuth({
   // alias). VERCEL_URL is set automatically by Vercel to whichever
   // deployment is currently serving the request, so this trusts that one
   // too without hardcoding anything.
-  trustedOrigins: process.env.VERCEL_URL ? [`https://${process.env.VERCEL_URL}`] : [],
+  // Also the production domain (the stable alias or custom domain people actually
+  // visit), the branch URL, and any extra domains listed in TRUSTED_ORIGINS
+  // (comma-separated, full https:// origins) — without these, signing in from the
+  // production address fails with "Invalid origin".
+  trustedOrigins: [
+    process.env.VERCEL_URL,
+    process.env.VERCEL_BRANCH_URL,
+    process.env.VERCEL_PROJECT_PRODUCTION_URL,
+  ]
+    .filter((h): h is string => !!h)
+    .map((h) => `https://${h}`)
+    .concat((process.env.TRUSTED_ORIGINS ?? "").split(",").map((o) => o.trim()).filter(Boolean)),
   user: {
     additionalFields: {
       // input: false — never settable by the account holder (sign-up or
