@@ -111,6 +111,8 @@ type Flag = { foundValue: string; note: string };
 function ItemPanel({ line, onClose, onSaved }: { line: LineView; onClose: () => void; onSaved: (line: LineView) => void }) {
   const [qty, setQty] = useState(line.actualQty !== null ? String(line.actualQty) : "");
   const [labelOk, setLabelOk] = useState(line.labelVerified);
+  // Open when the label has already been checked or has flags; otherwise out of the way.
+  const [labelOpen, setLabelOpen] = useState(line.labelVerified || line.issues.some((i) => i.field !== "COUNT"));
   const [flags, setFlags] = useState<Record<string, Flag>>(() =>
     Object.fromEntries(line.issues.filter((i) => i.field !== "COUNT").map((i) => [i.field, { foundValue: i.foundValue ?? "", note: i.note ?? "" }]))
   );
@@ -124,7 +126,7 @@ function ItemPanel({ line, onClose, onSaved }: { line: LineView; onClose: () => 
   const mismatch = validCount && isMismatch(line.systemQty, entered);
   const diff = mismatch && entered !== null && line.systemQty !== null ? entered - line.systemQty : 0;
   const flagCount = Object.keys(flags).length;
-  const canSave = validCount && (labelOk || flagCount > 0);
+  const canSave = validCount; // the label check is optional
 
   const toggle = (field: FlagField) =>
     setFlags((prev) => {
@@ -167,63 +169,8 @@ function ItemPanel({ line, onClose, onSaved }: { line: LineView; onClose: () => 
           <button type="button" onClick={onClose} className="shrink-0 rounded-full px-2 py-1 text-xl leading-none text-gray-400 hover:text-gray-700" aria-label="Close">×</button>
         </div>
 
-        {/* 1. The label */}
-        <div className="mt-4 flex items-center justify-between">
-          <p className="text-sm font-medium text-gray-800">1. Check the label against the system</p>
-          <button
-            type="button"
-            onClick={() => setLabelOk((v) => !v)}
-            className={`rounded-full px-3 py-1 text-xs font-semibold ${labelOk ? "bg-[#134229] text-white" : "border border-gray-300 text-gray-700"}`}
-          >
-            {labelOk ? "✓ Label matches" : flagCount > 0 ? "Rest of label matches" : "Label matches"}
-          </button>
-        </div>
-        <ul className="mt-2 divide-y divide-gray-100 rounded-xl border border-gray-200">
-          {LABEL_CHECK_FIELDS.map((field) => {
-            const flagged = flags[field];
-            const sys = systemValue(field);
-            return (
-              <li key={field} className={flagged ? "bg-red-50" : ""}>
-                <div className="flex items-center gap-2 px-3 py-2">
-                  <span className="w-28 shrink-0 text-xs font-medium uppercase tracking-wide text-gray-400">{fieldLabel(field)}</span>
-                  <span className="min-w-0 flex-1 truncate text-sm text-gray-900">{sys ?? "—"}</span>
-                  <button
-                    type="button"
-                    onClick={() => toggle(field)}
-                    aria-pressed={!!flagged}
-                    className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-semibold ${flagged ? "bg-red-600 text-white" : "border border-gray-300 text-gray-600 hover:bg-gray-50"}`}
-                  >
-                    {flagged ? "Wrong ✗" : "Wrong?"}
-                  </button>
-                </div>
-                {flagged && (
-                  <div className="space-y-2 px-3 pb-3">
-                    <input value={flagged.foundValue} onChange={(e) => setFlag(field, { foundValue: e.target.value })} placeholder={`What does the label show for ${fieldLabel(field).toLowerCase()}?`} className={input} />
-                    <input value={flagged.note} onChange={(e) => setFlag(field, { note: e.target.value })} placeholder="Note (optional)" className={input} />
-                  </div>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {WHOLE_LABEL_ISSUES.map((field) => (
-            <button
-              key={field}
-              type="button"
-              onClick={() => toggle(field)}
-              className={`rounded-full px-3 py-1 text-xs font-semibold ${flags[field] ? "bg-red-600 text-white" : "border border-gray-300 text-gray-600 hover:bg-gray-50"}`}
-            >
-              {FIELD_DEFS.find((d) => d.key === field)!.label}
-            </button>
-          ))}
-        </div>
-        {WHOLE_LABEL_ISSUES.filter((f) => flags[f]).map((field) => (
-          <input key={field} value={flags[field].note} onChange={(e) => setFlag(field, { note: e.target.value })} placeholder={`${fieldLabel(field)} — describe it`} className={`${input} mt-2`} />
-        ))}
-
-        {/* 2. The count */}
-        <p className="mt-5 text-sm font-medium text-gray-800">2. Count it</p>
+        {/* The count: the one required step */}
+        <p className="mt-4 text-sm font-medium text-gray-800">Count it</p>
         <div className="mt-2 flex items-center gap-3">
           <div className="w-32 shrink-0 rounded-xl bg-gray-50 p-3 text-center">
             <p className="text-xs uppercase tracking-wide text-gray-400">System</p>
@@ -248,6 +195,70 @@ function ItemPanel({ line, onClose, onSaved }: { line: LineView; onClose: () => 
           <textarea value={countNote} onChange={(e) => setCountNote(e.target.value)} rows={2} placeholder="What happened? (optional)" className={`${input} mt-2`} />
         )}
 
+        {/* The label: good to verify, never required */}
+        <details open={labelOpen} onToggle={(e) => setLabelOpen(e.currentTarget.open)} className="mt-5 rounded-xl border border-gray-200">
+          <summary className="cursor-pointer select-none px-3 py-2.5 text-sm font-medium text-gray-800">
+            Check the label <span className="font-normal text-gray-400">(optional)</span>
+            {labelOk && flagCount === 0 && <span className="ml-2 text-xs font-semibold text-[#134229]">✓ matches</span>}
+            {flagCount > 0 && <span className="ml-2 text-xs font-semibold text-red-700">{flagCount} wrong</span>}
+          </summary>
+          <div className="px-3 pb-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-gray-500">Compare the label with what the system says, and mark anything that&apos;s wrong.</p>
+            <button
+              type="button"
+              onClick={() => setLabelOk((v) => !v)}
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${labelOk ? "bg-[#134229] text-white" : "border border-gray-300 text-gray-700"}`}
+            >
+              {labelOk ? "✓ Label matches" : flagCount > 0 ? "Rest of label matches" : "Label matches"}
+            </button>
+          </div>
+          <ul className="mt-2 divide-y divide-gray-100 rounded-xl border border-gray-200">
+            {LABEL_CHECK_FIELDS.map((field) => {
+              const flagged = flags[field];
+              const sys = systemValue(field);
+              return (
+                <li key={field} className={flagged ? "bg-red-50" : ""}>
+                  <div className="flex items-center gap-2 px-3 py-2">
+                    <span className="w-28 shrink-0 text-xs font-medium uppercase tracking-wide text-gray-400">{fieldLabel(field)}</span>
+                    <span className="min-w-0 flex-1 truncate text-sm text-gray-900">{sys ?? "—"}</span>
+                    <button
+                      type="button"
+                      onClick={() => toggle(field)}
+                      aria-pressed={!!flagged}
+                      className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-semibold ${flagged ? "bg-red-600 text-white" : "border border-gray-300 text-gray-600 hover:bg-gray-50"}`}
+                    >
+                      {flagged ? "Wrong ✗" : "Wrong?"}
+                    </button>
+                  </div>
+                  {flagged && (
+                    <div className="space-y-2 px-3 pb-3">
+                      <input value={flagged.foundValue} onChange={(e) => setFlag(field, { foundValue: e.target.value })} placeholder={`What does the label show for ${fieldLabel(field).toLowerCase()}?`} className={input} />
+                      <input value={flagged.note} onChange={(e) => setFlag(field, { note: e.target.value })} placeholder="Note (optional)" className={input} />
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {WHOLE_LABEL_ISSUES.map((field) => (
+              <button
+                key={field}
+                type="button"
+                onClick={() => toggle(field)}
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${flags[field] ? "bg-red-600 text-white" : "border border-gray-300 text-gray-600 hover:bg-gray-50"}`}
+              >
+                {FIELD_DEFS.find((d) => d.key === field)!.label}
+              </button>
+            ))}
+          </div>
+          {WHOLE_LABEL_ISSUES.filter((f) => flags[f]).map((field) => (
+            <input key={field} value={flags[field].note} onChange={(e) => setFlag(field, { note: e.target.value })} placeholder={`${fieldLabel(field)} — describe it`} className={`${input} mt-2`} />
+          ))}
+          </div>
+        </details>
+
         {conflict && (
           <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
             {conflict}
@@ -269,7 +280,7 @@ function ItemPanel({ line, onClose, onSaved }: { line: LineView; onClose: () => 
         >
           {busy ? "Saving…" : "Save & next"}
         </button>
-        {!canSave && <p className="mt-2 text-center text-xs text-gray-400">{!validCount ? "Enter the count to save." : "Confirm the label matches, or mark what's wrong."}</p>}
+        {!canSave && <p className="mt-2 text-center text-xs text-gray-400">Enter the count to save.</p>}
 
         {line.issues.length > 0 && (
           <div className="mt-4 border-t border-gray-100 pt-3 text-xs text-gray-500">

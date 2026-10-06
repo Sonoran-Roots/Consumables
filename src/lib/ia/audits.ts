@@ -18,7 +18,7 @@ export type IssueInput = {
 export type RecordInput = {
   lineId: string;
   actualQty: number | null;
-  labelVerified: boolean; // the auditor confirms the label matches the system
+  labelVerified: boolean; // the auditor checked the label and confirms it matches (optional)
   countNote: string | null; // note on the count discrepancy, if there is one
   issues: IssueInput[]; // label problems (and anything else) the auditor flagged
   version: string;
@@ -68,12 +68,10 @@ export async function recordLine(input: RecordInput, actor: { userId: string }):
   const actual = input.actualQty;
   if (actual === null || !Number.isFinite(actual) || actual < 0) return { ok: false, error: "Enter the count (zero or more)." };
 
-  // The label has to have been looked at: confirmed, or something on it flagged.
+  // Checking the label is good practice but optional: a count is enough to save.
+  // The line records whether the label was looked at (confirmed, or something flagged).
   const issues = new Map<FlagField, IssueInput>();
   for (const i of input.issues) if (i.field !== "COUNT" && fieldDef(i.field)) issues.set(i.field, i);
-  if (!input.labelVerified && issues.size === 0) {
-    return { ok: false, error: "Confirm the label matches the system, or flag what's wrong with it." };
-  }
 
   // Everything that should have a finding after this save.
   const desired = new Map<FlagField, { foundValue: string | null; note: string | null }>();
@@ -139,7 +137,7 @@ export async function recordLine(input: RecordInput, actor: { userId: string }):
     const status: IaLineStatus = remaining > 0 ? "DISCREPANCY" : "OK";
     return tx.iaAuditLine.update({
       where: { id: line.id },
-      data: { actualQty: actual, labelVerified: true, status, note: clean(input.countNote), countedById: actor.userId, countedAt: new Date() },
+      data: { actualQty: actual, labelVerified: input.labelVerified || issues.size > 0, status, note: clean(input.countNote), countedById: actor.userId, countedAt: new Date() },
       include: lineInclude,
     });
   });

@@ -14,8 +14,8 @@ export default async function NewAuditPage() {
       <h1 className="text-xl font-semibold text-gray-900">Start an audit</h1>
       <p className="mt-1 text-sm text-gray-500">
         Choose where and when the audit happens and upload the Dutchie inventory export. Every item starts as{" "}
-        <strong className="font-medium text-gray-700">Pending</strong>; your auditors then scan each item, check its label
-        against the system, count it, and document anything that&apos;s wrong right there.
+        <strong className="font-medium text-gray-700">Pending</strong>; your auditors then scan each item, enter its count, and document anything that&apos;s wrong right there.
+        Checking the label against the system is optional — worth doing when you want to, not required for every item.
       </p>
 
       <div className="mt-6 rounded-lg border border-gray-200 bg-white p-6">
