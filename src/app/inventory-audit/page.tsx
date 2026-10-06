@@ -23,15 +23,15 @@ export default async function InventoryAuditHome({ searchParams }: PageProps<"/i
   const scope: Prisma.IaFindingWhereInput = me ? await findingScope(me) : { id: "" };
 
   const canAudit = me !== null && CAN_ENTER_FINDINGS.includes(me.role);
-  const [byStatus, overdue, byDepartment, recent, inProgress] = await Promise.all([
+  const [byStatus, overdue, byFacility, recent, inProgress] = await Promise.all([
     db.iaFinding.groupBy({ by: ["status"], where: scope, _count: { _all: true } }),
     db.iaFinding.count({ where: { AND: [scope, { status: { in: ["OPEN", "NOTIFIED"] }, dueDate: { lt: overdueCutoff(now) } }] } }),
-    db.iaFinding.groupBy({ by: ["departmentId"], where: { AND: [scope, { status: { in: ["OPEN", "NOTIFIED"] } }] }, _count: { _all: true }, orderBy: { _count: { departmentId: "desc" } }, take: 8 }),
+    db.iaFinding.groupBy({ by: ["facilityId"], where: { AND: [scope, { status: { in: ["OPEN", "NOTIFIED"] } }] }, _count: { _all: true }, orderBy: { _count: { facilityId: "desc" } }, take: 8 }),
     db.iaFinding.findMany({ where: scope, orderBy: { createdAt: "desc" }, take: 6, include: { facility: true, department: true } }),
     canAudit ? db.iaAudit.findMany({ where: { status: "IN_PROGRESS" }, orderBy: { createdAt: "desc" }, take: 5, include: { facility: true, _count: { select: { lines: true } } } }) : Promise.resolve([]),
   ]);
-  const departments = await db.iaDepartment.findMany({ where: { id: { in: byDepartment.map((d) => d.departmentId) } }, select: { id: true, name: true } });
-  const deptName = new Map(departments.map((d) => [d.id, d.name]));
+  const facilities = await db.iaFacility.findMany({ where: { id: { in: byFacility.map((d) => d.facilityId) } }, select: { id: true, name: true } });
+  const facilityName = new Map(facilities.map((f) => [f.id, f.name]));
   const count = (s: string) => byStatus.find((b) => b.status === s)?._count._all ?? 0;
 
   return (
@@ -80,19 +80,19 @@ export default async function InventoryAuditHome({ searchParams }: PageProps<"/i
 
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
         <section>
-          <h2 className="text-sm font-medium text-gray-700">Open work by department</h2>
+          <h2 className="text-sm font-medium text-gray-700">Open work by location</h2>
           <div className="mt-2 overflow-hidden rounded-lg border border-gray-200 bg-white">
             <table className="min-w-full divide-y divide-gray-100 text-sm">
               <tbody className="divide-y divide-gray-100">
-                {byDepartment.map((d) => (
-                  <tr key={d.departmentId}>
+                {byFacility.map((d) => (
+                  <tr key={d.facilityId}>
                     <td className="px-4 py-2 text-gray-900">
-                      <Link href={`/inventory-audit/findings?department=${d.departmentId}`} className="hover:underline">{deptName.get(d.departmentId) ?? "—"}</Link>
+                      <Link href={`/inventory-audit/findings?facility=${d.facilityId}`} className="hover:underline">{facilityName.get(d.facilityId) ?? "—"}</Link>
                     </td>
                     <td className="px-4 py-2 text-right tabular-nums text-gray-600">{d._count._all}</td>
                   </tr>
                 ))}
-                {byDepartment.length === 0 && <tr><td className="px-4 py-6 text-center text-gray-400">Nothing open.</td></tr>}
+                {byFacility.length === 0 && <tr><td className="px-4 py-6 text-center text-gray-400">Nothing open.</td></tr>}
               </tbody>
             </table>
           </div>
