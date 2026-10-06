@@ -84,7 +84,7 @@ export default function EmployeeAccessCell({
   return <ExistingAccessRow employeeId={employeeId} user={user} />;
 }
 
-function LinkExistingForm({
+export function LinkExistingForm({
   employeeId,
   onCancel,
 }: {
@@ -137,7 +137,7 @@ function LinkExistingForm({
   );
 }
 
-function CreateAccessForm({
+export function CreateAccessForm({
   employeeId,
   employeeName,
   onCancel,

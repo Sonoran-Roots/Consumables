@@ -6,30 +6,40 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { StaffRole } from "@prisma/client";
-import { isAuditRole, roleAtLeast } from "@/lib/access";
+import { isAnyAdmin, isAuditRole } from "@/lib/access";
 
 async function requireAdmin() {
   const session = await auth.api.getSession({ headers: await headers() });
-  if (!session || !roleAtLeast(session.user.role as string | undefined, "ADMIN")) {
+  if (!session || !isAnyAdmin(session.user as { role?: string; auditRole?: string | null })) {
     throw new Error("Only an admin can do that.");
   }
   return session;
 }
 
+// A working admin: an admin of Consumable Management, or of Inventory Audit.
+// Either can open the Employees page, the only place access is managed.
+const ADMIN_LOGIN = [{ role: "ADMIN" as const, isPurchasingTeam: true }, { auditRole: "ADMIN" as const }];
+
 // Would deleting this login leave the app with no working admin? Guards
-// against locking everyone out of the Employees page (the only place access
-// is managed).
+// against locking everyone out of the Employees page.
 async function isLastAdminLogin(userId: string): Promise<boolean> {
-  const target = await db.user.findUnique({
-    where: { id: userId },
-    select: { role: true, isPurchasingTeam: true },
-  });
-  if (!target || target.role !== "ADMIN" || !target.isPurchasingTeam) return false;
-  const others = await db.user.count({
-    where: { id: { not: userId }, role: "ADMIN", isPurchasingTeam: true },
-  });
+  const target = await db.user.findFirst({ where: { id: userId, OR: ADMIN_LOGIN }, select: { id: true } });
+  if (!target) return false;
+  const others = await db.user.count({ where: { id: { not: userId }, OR: ADMIN_LOGIN } });
   return others === 0;
 }
+
+// Would changing this person's access leave nobody able to manage access?
+async function removesLastAdmin(userId: string, next: { role?: string; isPurchasingTeam?: boolean; auditRole?: string | null }): Promise<boolean> {
+  const cur = await db.user.findUnique({ where: { id: userId }, select: { role: true, isPurchasingTeam: true, auditRole: true } });
+  if (!cur) return false;
+  const was = (cur.role === "ADMIN" && cur.isPurchasingTeam) || cur.auditRole === "ADMIN";
+  const merged = { ...cur, ...next };
+  const will = (merged.role === "ADMIN" && merged.isPurchasingTeam) || merged.auditRole === "ADMIN";
+  if (!was || will) return false;
+  return (await db.user.count({ where: { id: { not: userId }, OR: ADMIN_LOGIN } })) === 0;
+}
+const LAST_ADMIN = "That would leave no admin — make someone else an admin first.";
 
 export type CreateEmployeeState = { error?: string } | null;
 
@@ -153,6 +163,7 @@ export async function updateUserAccess(
     return { ok: false, error: (e as Error).message };
   }
 
+  if (await removesLastAdmin(userId, { role, isPurchasingTeam })) return { ok: false, error: LAST_ADMIN };
   await db.user.update({ where: { id: userId }, data: { role, isPurchasingTeam } });
   revalidatePath("/employees");
   return { ok: true };
@@ -173,8 +184,57 @@ export async function updateAuditAccess(
     return { ok: false, error: "Unknown audit access level." };
   }
 
+  if (await removesLastAdmin(userId, { auditRole })) return { ok: false, error: LAST_ADMIN };
   await db.user.update({ where: { id: userId }, data: { auditRole } });
   revalidatePath("/employees");
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// Managing a person's login (admins only)
+// ---------------------------------------------------------------------------
+
+// Change the email they sign in with (and optionally the name on the login).
+export async function updateLoginDetails(userId: string, email: string, name: string): Promise<AppAccessResult> {
+  try {
+    await requireAdmin();
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+  const cleanEmail = email.trim().toLowerCase();
+  if (!/^[^s@]+@[^s@]+.[^s@]+$/.test(cleanEmail)) return { ok: false, error: "Enter a valid email address." };
+  if (!name.trim()) return { ok: false, error: "The name can't be blank." };
+  const clash = await db.user.findFirst({ where: { email: cleanEmail, id: { not: userId } }, select: { id: true } });
+  if (clash) return { ok: false, error: "Another account already uses that email." };
+  await db.user.update({ where: { id: userId }, data: { email: cleanEmail, name: name.trim() } });
+  revalidatePath("/employees");
+  return { ok: true };
+}
+
+// Set a new password for them; every device they're signed in on is signed out.
+export async function setLoginPassword(userId: string, password: string): Promise<AppAccessResult> {
+  try {
+    await requireAdmin();
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+  if (password.length < 8) return { ok: false, error: "Use at least 8 characters." };
+  const ctx = await auth.$context;
+  const hash = await ctx.password.hash(password);
+  const updated = await db.account.updateMany({ where: { userId, providerId: "credential" }, data: { password: hash } });
+  if (updated.count === 0) return { ok: false, error: "That login has no password to reset." };
+  await db.session.deleteMany({ where: { userId } });
+  revalidatePath("/employees");
+  return { ok: true };
+}
+
+export async function signOutEverywhere(userId: string): Promise<AppAccessResult> {
+  try {
+    await requireAdmin();
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+  await db.session.deleteMany({ where: { userId } });
   return { ok: true };
 }
 

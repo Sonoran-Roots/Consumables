@@ -65,6 +65,11 @@ export default function AuditSidebar() {
             </Link>
           );
         })}
+        {user?.auditRole === "ADMIN" && (
+          <Link href="/employees" className="mx-2 my-0.5 block rounded-md px-2.5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100">
+            Employees &amp; access
+          </Link>
+        )}
       </div>
 
       {user && (

@@ -1,9 +1,10 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { isAuditPath } from "@/lib/access";
+import { isAuditPath, isPeoplePath } from "@/lib/access";
 import Sidebar from "./sidebar";
 import AuditSidebar from "./audit-sidebar";
+import PeopleShell from "./people-shell";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -14,6 +15,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   if (isKiosk || isAuthPage || isModulePicker) {
     return <main className="min-h-full w-full">{children}</main>;
   }
+
+  // Employees & access belongs to every module, so it has no module sidebar.
+  if (pathname && isPeoplePath(pathname)) return <PeopleShell>{children}</PeopleShell>;
 
   // Each module has its own sidebar; they share nothing but the page frame.
   return (

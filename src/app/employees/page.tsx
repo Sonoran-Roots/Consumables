@@ -2,7 +2,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { db } from "@/lib/db";
 import { auth } from "@/lib/auth";
-import { roleAtLeast } from "@/lib/access";
+import { isAnyAdmin } from "@/lib/access";
 import EmployeeAccessCell from "./employee-access-cell";
 import RemoveEmployeeButton from "./remove-employee-button";
 import StandaloneAccountsTable from "./standalone-accounts-table";
@@ -30,7 +30,7 @@ export default async function EmployeesPage() {
     }),
   ]);
 
-  const isAdmin = roleAtLeast(session?.user.role as string | undefined, "ADMIN");
+  const isAdmin = !!session && isAnyAdmin(session.user as { role?: string; auditRole?: string | null });
 
   return (
     <div>
@@ -38,8 +38,8 @@ export default async function EmployeesPage() {
         <div className="min-w-0">
           <h1 className="text-xl font-semibold text-gray-900">Employees</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Real accountability for checkouts and transfers, and who can open which module:
-            Consumable Management and Inventory Audit each have their own access level.
+            One list of people for every module. Set each person&apos;s access level in Consumable Management and Inventory Audit, and manage their login
+            (email, password, sign-out) from their page.
           </p>
         </div>
         <Link

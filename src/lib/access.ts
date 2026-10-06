@@ -2,6 +2,16 @@ export type StaffRole = "USER" | "MANAGER" | "ADMIN";
 
 const ROLE_RANK: Record<StaffRole, number> = { USER: 0, MANAGER: 1, ADMIN: 2 };
 
+// An admin of either module. The Employees page manages people and their access
+// in every module, so an admin of any module can open it.
+export function isAnyAdmin(user: { role?: string | null; auditRole?: string | null }): boolean {
+  return roleAtLeast(user.role, "ADMIN") || user.auditRole === "ADMIN";
+}
+
+export function isPeoplePath(pathname: string): boolean {
+  return pathname === "/employees" || pathname.startsWith("/employees/");
+}
+
 export function roleAtLeast(role: string | null | undefined, minimum: StaffRole): boolean {
   const rank = ROLE_RANK[(role as StaffRole) ?? "USER"] ?? 0;
   return rank >= ROLE_RANK[minimum];
@@ -106,6 +116,9 @@ export function decideAccess(
   if (!hasConsumables && !auditRole) return { allow: false, to: "/kiosk" };
 
   if (pathname === "/modules") return { allow: true };
+
+  // Employees & access is shared by every module: an admin of either one gets in.
+  if (isPeoplePath(pathname) && isAnyAdmin(user)) return { allow: true };
 
   if (isAuditPath(pathname)) {
     if (!auditRole) return { allow: false, to: "/", denied: true };
