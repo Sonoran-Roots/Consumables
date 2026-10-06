@@ -6,6 +6,7 @@ import { getAuditSession } from "@/lib/ia/auth";
 import { canSeeFinding } from "@/lib/ia/scope";
 import { getFormOptions } from "@/lib/ia/options";
 import { formatDate } from "@/lib/ia/dates";
+import { defaultTarget, describeAdjustment, fieldLabel } from "@/lib/ia/audit-rules";
 import { availableActions, CAN_ENTER_FINDINGS, daysOverdue, isOverdue, STATUS_LABEL } from "@/lib/ia/workflow";
 import StatusBadge from "../../_components/status-badge";
 import FindingActions from "../../_components/finding-actions";
@@ -71,6 +72,19 @@ export default async function FindingPage({ params }: PageProps<"/inventory-audi
           <dl className="grid gap-4 rounded-lg border border-gray-200 bg-white p-5 sm:grid-cols-2">
             <Field label="Category" value={f.category?.name} />
             <Field label="From audit" value={f.audit ? (me.role === "MANAGER" ? f.audit.name : <Link href={`/inventory-audit/audits/${f.audit.id}`} className="underline">{f.audit.name}</Link>) : null} />
+            <Field label="Flagged field" value={f.flaggedField ? fieldLabel(f.flaggedField) : null} />
+            <Field label="System says" value={f.systemValue} />
+            <Field label="Found" value={f.foundValue} />
+            <Field label="Found during the audit" value={f.auditId ? f.foundAt.toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }) : null} />
+            <Field label="Review" value={f.needsReview ? "Waiting for an audit manager to review" : f.reviewedAt ? `Reviewed ${formatDate(f.reviewedAt)}` : null} />
+            <Field
+              label="Adjustment"
+              value={
+                f.adjustmentStatus === "NOT_NEEDED"
+                  ? null
+                  : `${describeAdjustment({ flaggedField: f.flaggedField, systemValue: f.systemValue, foundValue: f.foundValue, unit: f.unit, target: f.adjustmentTarget ?? defaultTarget(f.flaggedField) })} — ${f.adjustmentStatus === "APPLIED" ? `done ${formatDate(f.adjustedAt)}` : "to do"}`
+              }
+            />
             <Field label="Facility" value={f.facility.name} />
             <Field label="Date audited" value={formatDate(f.auditDate)} />
             <Field label="Department" value={f.department.name} />

@@ -18,15 +18,7 @@ export default function NewAuditForm({ facilities, departments, today }: { facil
       </div>
       <div className="grid gap-4 sm:grid-cols-3">
         <div>
-          <label className={label}>Audit type *</label>
-          {/* Product inventory audits only for now. Plant-room audits (Clone, VEG, Flower)
-              and waste-log audits will be added later; the audit code already supports them. */}
-          <select name="auditType" defaultValue="PRODUCT" className={input}>
-            <option value="PRODUCT">Product inventory audit</option>
-          </select>
-        </div>
-        <div>
-          <label className={label}>Facility *</label>
+          <label className={label}>Location *</label>
           <select name="facilityId" required defaultValue="" className={input}>
             <option value="" disabled>Select…</option>
             {facilities.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
@@ -37,12 +29,12 @@ export default function NewAuditForm({ facilities, departments, today }: { facil
           <input type="date" name="auditDate" required defaultValue={today} className={input} />
         </div>
         <div className="sm:col-span-2">
-          <label className={label}>Findings go to department *</label>
+          <label className={label}>Findings go to department by default *</label>
           <select name="defaultDepartmentId" required defaultValue="" className={input}>
             <option value="" disabled>Select…</option>
             {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
           </select>
-          <p className="mt-1 text-xs text-gray-400">Every finding documented in this audit is attributed here; change it on a finding if needed.</p>
+          <p className="mt-1 text-xs text-gray-400">Findings captured during the audit start here; you can reassign each one when you review them afterwards.</p>
         </div>
         <div>
           <label className={label}>Auditors</label>
@@ -54,7 +46,7 @@ export default function NewAuditForm({ facilities, departments, today }: { facil
         <textarea name="notes" rows={2} className={input} />
       </div>
       <div>
-        <label className={label}>CSV of lines to audit *</label>
+        <label className={label}>Dutchie inventory export (CSV) *</label>
         <input
           name="file" type="file" accept=".csv,text/csv" required
           className="mt-1 block w-full text-sm text-gray-700 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-2 file:text-sm file:font-medium hover:file:bg-gray-200"

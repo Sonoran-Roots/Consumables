@@ -17,6 +17,8 @@
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
+    "@zxing/browser": "^0.2.1",
+    "@zxing/library": "^0.23.0",
     "better-auth": "^1.7.6",
     "csv-parse": "^7.0.2",
     "dotenv": "^18.0.3",

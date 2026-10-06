@@ -2,7 +2,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { MODULE_HOME, modulesFor, type ModuleKey } from "@/lib/access";
+import { MODULE_HOME, auditRoleLabel, modulesFor, type ModuleKey } from "@/lib/access";
 import JarsLogo from "@/components/jars-logo";
 import SignOutButton from "./sign-out-button";
 
@@ -43,7 +43,7 @@ export default async function ModulesPage() {
 
   const level: Record<ModuleKey, string> = {
     CONSUMABLES: titleCase(user.role ?? "USER"),
-    AUDIT: titleCase(user.auditRole ?? ""),
+    AUDIT: auditRoleLabel(user.auditRole),
   };
 
   return (

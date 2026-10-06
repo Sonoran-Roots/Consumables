@@ -9,7 +9,7 @@ import {
   updateAuditAccess,
   updateUserAccess,
 } from "./actions";
-import { AUDIT_ROLES, type StaffRole } from "@/lib/access";
+import { AUDIT_ROLES, auditRoleLabel, type StaffRole } from "@/lib/access";
 
 type LinkedUser = {
   id: string;
@@ -38,7 +38,7 @@ export default function EmployeeAccessCell({
   if (!isAdmin) {
     const parts: string[] = [];
     if (user?.isPurchasingTeam) parts.push(`Consumables (${titleCase(user.role)})`);
-    if (user?.auditRole) parts.push(`Audit (${titleCase(user.auditRole)})`);
+    if (user?.auditRole) parts.push(`Audit (${auditRoleLabel(user.auditRole)})`);
     return (
       <span className="text-sm text-gray-500">{parts.length ? parts.join(" · ") : "Kiosk only"}</span>
     );
@@ -312,7 +312,7 @@ function ExistingAccessRow({
           <option value="">No access</option>
           {AUDIT_ROLES.map((r) => (
             <option key={r} value={r}>
-              {titleCase(r)}
+              {auditRoleLabel(r)}
             </option>
           ))}
         </select>

@@ -8,12 +8,13 @@ const btn = "rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font
 const primary = "rounded-md border border-black bg-black px-3 py-1.5 text-sm font-medium text-white hover:bg-white hover:text-black disabled:opacity-50";
 
 export default function AuditControls({
-  auditId, status, pending, isAdmin, exportHref,
+  auditId, status, pending, canRun, canDelete, exportHref,
 }: {
   auditId: string;
   status: "IN_PROGRESS" | "COMPLETED";
   pending: number;
-  isAdmin: boolean;
+  canRun: boolean; // an audit manager: complete / reopen
+  canDelete: boolean; // an admin
   exportHref: string;
 }) {
   const router = useRouter();
@@ -51,15 +52,15 @@ export default function AuditControls({
   return (
     <div className="flex flex-wrap items-center gap-2">
       <a href={exportHref} className={btn}>Download CSV</a>
-      {status === "IN_PROGRESS" && (
+      {status === "IN_PROGRESS" && canRun && (
         <button type="button" disabled={busy} className={primary} onClick={complete}>
           {pending > 0 ? "Complete audit…" : "Complete audit"}
         </button>
       )}
-      {status === "COMPLETED" && isAdmin && (
+      {status === "COMPLETED" && canRun && (
         <button type="button" disabled={busy} className={btn} onClick={() => run(() => reopenAuditAction(auditId))}>Reopen</button>
       )}
-      {isAdmin && (
+      {canDelete && (
         <button
           type="button" disabled={busy}
           className="text-xs text-gray-400 hover:text-red-600 hover:underline"

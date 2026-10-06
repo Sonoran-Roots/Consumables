@@ -47,8 +47,18 @@ export function minRoleFor(pathname: string): StaffRole {
 // Kiosk tablets are neither: they only ever reach /kiosk.
 // ---------------------------------------------------------------------------
 
-export type AuditRole = "AUDITOR" | "MANAGER" | "ADMIN";
-export const AUDIT_ROLES: AuditRole[] = ["AUDITOR", "MANAGER", "ADMIN"];
+// AUDITOR counts and captures findings; AUDIT_MANAGER also creates audits,
+// triages their findings and runs the adjustments report; MANAGER is a
+// department manager that findings are routed to; ADMIN does everything.
+export type AuditRole = "AUDITOR" | "AUDIT_MANAGER" | "MANAGER" | "ADMIN";
+export const AUDIT_ROLES: AuditRole[] = ["AUDITOR", "AUDIT_MANAGER", "MANAGER", "ADMIN"];
+export const AUDIT_ROLE_LABEL: Record<AuditRole, string> = {
+  AUDITOR: "Auditor",
+  AUDIT_MANAGER: "Audit manager",
+  MANAGER: "Department manager",
+  ADMIN: "Admin",
+};
+export const auditRoleLabel = (role: string | null | undefined) => (isAuditRole(role) ? AUDIT_ROLE_LABEL[role] : "");
 
 // /inventory-audit, not /audit: the consumables side already has /audits, and
 // prefix checks would otherwise confuse the two.
@@ -117,11 +127,14 @@ export function decideAccess(
 // it. Longest matching prefix wins; anything unlisted is open to all three.
 const AUDIT_ROUTE_ROLES: { prefix: string; roles: AuditRole[] }[] = [
   { prefix: `${AUDIT_PREFIX}/settings`, roles: ["ADMIN"] },
-  { prefix: `${AUDIT_PREFIX}/upload`, roles: ["AUDITOR", "ADMIN"] },
-  { prefix: `${AUDIT_PREFIX}/email`, roles: ["AUDITOR", "ADMIN"] },
-  { prefix: `${AUDIT_PREFIX}/audits`, roles: ["AUDITOR", "ADMIN"] },
-  { prefix: `${AUDIT_PREFIX}/findings/new`, roles: ["AUDITOR", "ADMIN"] },
-  { prefix: `${AUDIT_PREFIX}/edit`, roles: ["AUDITOR", "ADMIN"] },
+  { prefix: `${AUDIT_PREFIX}/upload`, roles: ["AUDITOR", "AUDIT_MANAGER", "ADMIN"] },
+  { prefix: `${AUDIT_PREFIX}/email`, roles: ["AUDITOR", "AUDIT_MANAGER", "ADMIN"] },
+  { prefix: `${AUDIT_PREFIX}/audits`, roles: ["AUDITOR", "AUDIT_MANAGER", "ADMIN"] }, // counting
+  { prefix: `${AUDIT_PREFIX}/audits/new`, roles: ["AUDIT_MANAGER", "ADMIN"] }, // starting an audit
+  { prefix: `${AUDIT_PREFIX}/review`, roles: ["AUDIT_MANAGER", "ADMIN"] },
+  { prefix: `${AUDIT_PREFIX}/adjustments`, roles: ["AUDIT_MANAGER", "ADMIN"] },
+  { prefix: `${AUDIT_PREFIX}/findings/new`, roles: ["AUDITOR", "AUDIT_MANAGER", "ADMIN"] },
+  { prefix: `${AUDIT_PREFIX}/edit`, roles: ["AUDITOR", "AUDIT_MANAGER", "ADMIN"] },
 ];
 
 export function auditRolesAllowedFor(pathname: string): AuditRole[] {

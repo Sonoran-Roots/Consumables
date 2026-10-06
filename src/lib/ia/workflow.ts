@@ -22,10 +22,10 @@ export const STATUS_LABEL: Record<FindingStatus, string> = {
 type Rule = { from: FindingStatus[]; to: FindingStatus; roles: AuditRole[]; label: string; noteRequired: boolean };
 
 const RULES: Record<FindingAction, Rule> = {
-  NOTIFY: { from: ["OPEN"], to: "NOTIFIED", roles: ["AUDITOR", "ADMIN"], label: "Mark teams notified", noteRequired: false },
+  NOTIFY: { from: ["OPEN"], to: "NOTIFIED", roles: ["AUDITOR", "AUDIT_MANAGER", "ADMIN"], label: "Mark teams notified", noteRequired: false },
   RESOLVE: { from: ["OPEN", "NOTIFIED"], to: "RESOLVED", roles: ["MANAGER", "ADMIN"], label: "Mark resolved", noteRequired: true },
-  VERIFY: { from: ["RESOLVED"], to: "VERIFIED", roles: ["AUDITOR", "ADMIN"], label: "Verify resolution", noteRequired: false },
-  REOPEN: { from: ["NOTIFIED", "RESOLVED", "VERIFIED"], to: "OPEN", roles: ["AUDITOR", "ADMIN"], label: "Reopen", noteRequired: true },
+  VERIFY: { from: ["RESOLVED"], to: "VERIFIED", roles: ["AUDITOR", "AUDIT_MANAGER", "ADMIN"], label: "Verify resolution", noteRequired: false },
+  REOPEN: { from: ["NOTIFIED", "RESOLVED", "VERIFIED"], to: "OPEN", roles: ["AUDITOR", "AUDIT_MANAGER", "ADMIN"], label: "Reopen", noteRequired: true },
 };
 
 export type AvailableAction = { action: FindingAction; label: string; to: FindingStatus; noteRequired: boolean };
@@ -55,7 +55,10 @@ export function checkTransition(
 export const targetStatus = (action: FindingAction): FindingStatus => RULES[action].to;
 
 // Who may log or edit findings, change their routing, and use the settings.
-export const CAN_ENTER_FINDINGS: AuditRole[] = ["AUDITOR", "ADMIN"];
+// Count audits, log and edit findings, send the manager emails.
+export const CAN_ENTER_FINDINGS: AuditRole[] = ["AUDITOR", "AUDIT_MANAGER", "ADMIN"];
+// Start audits, complete and reopen them, review (triage) their findings and run the adjustments report.
+export const CAN_RUN_AUDITS: AuditRole[] = ["AUDIT_MANAGER", "ADMIN"];
 export const CAN_CONFIGURE: AuditRole[] = ["ADMIN"];
 
 const DAY_MS = 86_400_000;

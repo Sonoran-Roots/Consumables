@@ -4,18 +4,17 @@ import BackLink from "@/components/back-link";
 import { db } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import { getAuditSession } from "@/lib/ia/auth";
-import { auditStats, toLineView } from "@/lib/ia/audits";
-import { defaultCategoryName } from "@/lib/ia/audit-rules";
+import { AUDIT_LINE_INCLUDE, auditStats, toLineView } from "@/lib/ia/audits";
 import { formatDate } from "@/lib/ia/dates";
-import { CAN_CONFIGURE, CAN_ENTER_FINDINGS, isOverdue } from "@/lib/ia/workflow";
+import { CAN_CONFIGURE, CAN_ENTER_FINDINGS, CAN_RUN_AUDITS, isOverdue } from "@/lib/ia/workflow";
 import StatusBadge from "../../_components/status-badge";
 import AuditBoard from "./audit-board";
 import AuditControls from "./audit-controls";
+import ScanButton from "./scan-button";
 
 export const dynamic = "force-dynamic";
 const PAGE_SIZE = 100;
 const one = (v: string | string[] | undefined) => ((Array.isArray(v) ? v[0] : v) ?? "").trim();
-const TYPE_LABEL = { PRODUCT: "Product audit", PLANT: "Plant room audit", WASTE_LOG: "Waste log audit" } as const;
 
 export default async function AuditPage({ params, searchParams }: PageProps<"/inventory-audit/audits/[id]">) {
   const { id } = await params;
@@ -37,6 +36,7 @@ export default async function AuditPage({ params, searchParams }: PageProps<"/in
   const status = ["pending", "ok", "discrepancy", "all"].includes(statusRaw) ? statusRaw : stats.pending > 0 ? "pending" : "all";
   const page = Math.max(1, Number(one(sp.page)) || 1);
   const canEdit = audit.status === "IN_PROGRESS";
+  const canRun = CAN_RUN_AUDITS.includes(me.role);
 
   const qs = (over: Record<string, string>) => {
     const u = new URLSearchParams();
@@ -50,25 +50,26 @@ export default async function AuditPage({ params, searchParams }: PageProps<"/in
   let body: React.ReactNode;
   if (view === "findings") {
     const findings = await db.iaFinding.findMany({
-      where: { auditId: id }, orderBy: [{ createdAt: "desc" }],
+      where: { auditId: id }, orderBy: [{ foundAt: "asc" }],
       include: { department: true, findingType: true, assignedTo: { select: { name: true, email: true } } },
     });
     body = (
       <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
         <table className="min-w-full divide-y divide-gray-200 text-sm">
-          <thead className="bg-gray-50"><tr>{["Finding", "Type", "Department", "Status", "Due", "Assigned"].map((h) => <th key={h} className="px-3 py-2 text-left font-medium text-gray-500">{h}</th>)}</tr></thead>
+          <thead className="bg-gray-50"><tr>{["Found", "Finding", "Type", "Department", "Status", "Assigned", ""].map((h) => <th key={h} className="px-3 py-2 text-left font-medium text-gray-500">{h}</th>)}</tr></thead>
           <tbody className="divide-y divide-gray-100">
             {findings.map((f) => (
               <tr key={f.id} className="hover:bg-gray-50">
+                <td className="whitespace-nowrap px-3 py-2 text-gray-600">{f.foundAt.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</td>
                 <td className="max-w-md px-3 py-2"><Link href={`/inventory-audit/findings/${f.id}`} className="font-medium text-gray-900 hover:underline">{f.description.length > 100 ? `${f.description.slice(0, 100)}…` : f.description}</Link></td>
                 <td className="whitespace-nowrap px-3 py-2 text-gray-600">{f.findingType.name}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-gray-600">{f.department.name}</td>
                 <td className="whitespace-nowrap px-3 py-2"><StatusBadge status={f.status} overdue={isOverdue(f)} /></td>
-                <td className="whitespace-nowrap px-3 py-2 text-gray-600">{formatDate(f.dueDate)}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-gray-600">{f.assignedTo ? f.assignedTo.name || f.assignedTo.email : "—"}</td>
+                <td className="whitespace-nowrap px-3 py-2">{f.needsReview && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800">Needs review</span>}</td>
               </tr>
             ))}
-            {findings.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">No discrepancies documented in this audit.</td></tr>}
+            {findings.length === 0 && <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">No discrepancies documented in this audit.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -79,51 +80,58 @@ export default async function AuditPage({ params, searchParams }: PageProps<"/in
       ...(status === "pending" ? { status: "PENDING" } : status === "ok" ? { status: "OK" } : status === "discrepancy" ? { status: "DISCREPANCY" } : {}),
       ...(room ? { room } : {}),
       ...(q ? { OR: [
-        { product: { contains: q, mode: "insensitive" } }, { batchId: { contains: q, mode: "insensitive" } }, { pid: { contains: q, mode: "insensitive" } },
-        { strain: { contains: q, mode: "insensitive" } }, { serialNo: { contains: q, mode: "insensitive" } },
+        { pid: { contains: q, mode: "insensitive" } }, { serialNo: { contains: q, mode: "insensitive" } }, { batchId: { contains: q, mode: "insensitive" } },
+        { product: { contains: q, mode: "insensitive" } }, { strain: { contains: q, mode: "insensitive" } },
       ] } : {}),
     };
-    const [matching, rows, rooms, categories] = await Promise.all([
+    const [matching, rows, rooms, exact] = await Promise.all([
       db.iaAuditLine.count({ where }),
-      db.iaAuditLine.findMany({
-        where, orderBy: { position: "asc" }, skip: (page - 1) * PAGE_SIZE, take: PAGE_SIZE,
-        include: { countedBy: { select: { name: true, email: true } }, finding: { select: { id: true, status: true } } },
-      }),
+      db.iaAuditLine.findMany({ where, orderBy: { position: "asc" }, skip: (page - 1) * PAGE_SIZE, take: PAGE_SIZE, include: AUDIT_LINE_INCLUDE }),
       db.iaAuditLine.groupBy({ by: ["room"], where: { auditId: id, room: { not: null } }, _count: { _all: true }, orderBy: { room: "asc" } }),
-      db.iaFindingCategory.findMany({ where: { isActive: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }], select: { id: true, name: true } }),
+      // A scanned barcode is the Package ID: an exact match opens that item straight away.
+      q ? db.iaAuditLine.findMany({ where: { auditId: id, pid: { equals: q, mode: "insensitive" } }, select: { id: true }, take: 2 }) : Promise.resolve([]),
     ]);
     const pages = Math.max(1, Math.ceil(matching / PAGE_SIZE));
-    const defaultCategoryId = (categories.find((c) => c.name === defaultCategoryName(audit.auditType)) ?? categories[0])?.id ?? "";
-    // A scan that finds exactly one line opens it straight away.
-    const openId = q && matching === 1 && rows[0]?.status === "PENDING" ? rows[0].id : null;
+    const openId = exact.length === 1 ? exact[0].id : q && matching === 1 ? rows[0]?.id ?? null : null;
+    // Opening a scanned item that sits on another page or under another filter: show it.
+    const lines = openId && !rows.some((r) => r.id === openId)
+      ? [...(await db.iaAuditLine.findMany({ where: { id: openId }, include: AUDIT_LINE_INCLUDE })), ...rows]
+      : rows;
 
     body = (
       <>
         <form method="get" className="flex flex-wrap items-center gap-2">
-          <input type="hidden" name="status" value={status} />
+          <input type="hidden" name="status" value={q ? "all" : status} />
           <input
-            name="q" defaultValue={q} placeholder="Search or scan batch, PID, tag, serial, product…"
+            name="q" defaultValue={q} placeholder="Scan the barcode, or type a PID, tag, batch or product"
             autoFocus={q !== ""}
             className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-base sm:max-w-md"
           />
+          <button className="rounded-lg border border-black bg-black px-4 py-2 text-sm font-medium text-white">Find</button>
+          {canEdit && <ScanButton auditId={id} />}
           {rooms.length > 0 && (
             <select name="room" defaultValue={room} className="rounded-lg border border-gray-300 px-2 py-2 text-sm">
               <option value="">All rooms</option>
               {rooms.map((r) => <option key={r.room} value={r.room!}>{r.room} ({r._count._all})</option>)}
             </select>
           )}
-          <button className="rounded-lg border border-black bg-black px-4 py-2 text-sm font-medium text-white">Find</button>
           {(q || room) && <Link href={qs({ q: "", room: "" })} className="text-sm text-gray-500 hover:underline">Clear</Link>}
         </form>
 
+        {q && matching === 0 && exact.length === 0 && (
+          <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Nothing in this audit matches “{q}”. If it&apos;s a real item that wasn&apos;t in the export, add it to the audit list or record it as a finding.
+          </p>
+        )}
+
         <p className="mt-3 text-xs text-gray-500">
-          {matching.toLocaleString("en-US")} line{matching === 1 ? "" : "s"}
+          {matching.toLocaleString("en-US")} item{matching === 1 ? "" : "s"}
           {pages > 1 && ` · page ${page} of ${pages}`}
-          {canEdit ? " · tap a line to count it" : " · this audit is complete"}
+          {canEdit ? " · tap an item to audit it" : " · this audit is complete"}
         </p>
 
         <div className="mt-2">
-          <AuditBoard lines={rows.map(toLineView)} categories={categories} defaultCategoryId={defaultCategoryId} canEdit={canEdit} openId={openId} />
+          <AuditBoard lines={lines.map(toLineView)} canEdit={canEdit} openId={openId} />
         </div>
 
         {pages > 1 && (
@@ -140,7 +148,7 @@ export default async function AuditPage({ params, searchParams }: PageProps<"/in
   }
 
   const tab = (key: string, label: string, n: number) => (
-    <Link key={key} href={qs({ status: key, page: "", view: "" })}
+    <Link key={key} href={qs({ status: key, page: "", view: "", q: "" })}
       className={`rounded-full px-3 py-1 text-sm font-medium ${view === "count" && status === key ? "bg-black text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}>
       {label} <span className="tabular-nums opacity-70">{n.toLocaleString("en-US")}</span>
     </Link>
@@ -153,7 +161,7 @@ export default async function AuditPage({ params, searchParams }: PageProps<"/in
         <div className="min-w-0">
           <h1 className="text-xl font-semibold text-gray-900">{audit.name}</h1>
           <p className="mt-1 text-sm text-gray-500">
-            {audit.facility.name} · {TYPE_LABEL[audit.auditType]} · {formatDate(audit.auditDate)}
+            {audit.facility.name} · {formatDate(audit.auditDate)}
             {audit.auditors ? ` · ${audit.auditors}` : ""}
             {audit.defaultDepartment ? ` · findings to ${audit.defaultDepartment.name}` : ""}
           </p>
@@ -161,24 +169,41 @@ export default async function AuditPage({ params, searchParams }: PageProps<"/in
             {audit.status === "COMPLETED"
               ? `Completed ${formatDate(audit.completedAt)}${audit.completedBy ? ` by ${audit.completedBy.name || audit.completedBy.email}` : ""}`
               : "In progress"}
+            {audit.createdBy ? ` · started by ${audit.createdBy.name || audit.createdBy.email}` : ""}
             {audit.sourceFile ? ` · from ${audit.sourceFile}` : ""}
           </p>
         </div>
-        <AuditControls auditId={id} status={audit.status} pending={stats.pending} isAdmin={CAN_CONFIGURE.includes(me.role)} exportHref={`/inventory-audit/audits/${id}/export`} />
+        <AuditControls
+          auditId={id} status={audit.status} pending={stats.pending}
+          canRun={canRun} canDelete={CAN_CONFIGURE.includes(me.role)}
+          exportHref={`/inventory-audit/audits/${id}/export`}
+        />
       </div>
 
       <div className="mt-4">
         <div className="flex items-center justify-between text-sm text-gray-600">
-          <span>{stats.counted.toLocaleString("en-US")} of {stats.total.toLocaleString("en-US")} counted ({progress}%)</span>
+          <span>{stats.counted.toLocaleString("en-US")} of {stats.total.toLocaleString("en-US")} audited ({progress}%)</span>
           <span>
-            {stats.discrepancy.toLocaleString("en-US")} discrepanc{stats.discrepancy === 1 ? "y" : "ies"}
-            {stats.counted > 0 && ` · ${(stats.rate * 100).toFixed(1)}% of counted lines`}
+            {stats.discrepancy.toLocaleString("en-US")} item{stats.discrepancy === 1 ? "" : "s"} with discrepancies
+            {stats.counted > 0 && ` · ${(stats.rate * 100).toFixed(1)}%`}
           </span>
         </div>
         <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-gray-100">
           <div className="h-full rounded-full bg-[#134229]" style={{ width: `${progress}%` }} />
         </div>
       </div>
+
+      {canRun && (stats.toReview > 0 || stats.pendingAdjustments > 0 || audit.status === "COMPLETED") && (
+        <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <span className="font-medium">After the audit:</span>
+          <Link href={`/inventory-audit/review/${id}`} className="font-medium underline">
+            Review findings{stats.toReview > 0 ? ` (${stats.toReview} need review)` : ""}
+          </Link>
+          <Link href={`/inventory-audit/adjustments/${id}`} className="font-medium underline">
+            Adjustments report{stats.pendingAdjustments > 0 ? ` (${stats.pendingAdjustments} pending)` : ""}
+          </Link>
+        </div>
+      )}
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         {tab("pending", "Pending", stats.pending)}

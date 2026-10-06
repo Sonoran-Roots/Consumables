@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { auditRoleLabel } from "@/lib/access";
 import { TEMPLATE_PLACEHOLDERS } from "@/lib/ia/email";
 import { addCoverage, removeCoverage, saveCategory, saveDepartment, saveEmailTemplate, saveFacility, saveFindingType } from "./actions";
 
@@ -151,7 +152,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/invento
             return (
               <div key={m.id} className="rounded-md border border-gray-100 p-3">
                 <p className="text-sm font-medium text-gray-900">
-                  {m.name || m.email} <span className="text-xs font-normal text-gray-400">· {m.auditRole === "ADMIN" ? "Admin" : "Manager"}</span>
+                  {m.name || m.email} <span className="text-xs font-normal text-gray-400">· {auditRoleLabel(m.auditRole)}</span>
                 </p>
                 {rules.length === 0 ? (
                   <p className="mt-1 text-xs text-gray-400">No coverage rules — only sees findings assigned to them directly.</p>

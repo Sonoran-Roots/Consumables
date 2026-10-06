@@ -13,9 +13,9 @@ export default async function NewAuditPage() {
       <BackLink href="/inventory-audit/audits" label="Audits" />
       <h1 className="text-xl font-semibold text-gray-900">Start an audit</h1>
       <p className="mt-1 text-sm text-gray-500">
-        Upload the list of product lines to count — for example the Dutchie export or a product tab from the tracker.
-        Every line starts as <strong className="font-medium text-gray-700">Pending</strong>, and your team then counts
-        them one by one.
+        Choose where and when the audit happens and upload the Dutchie inventory export. Every item starts as{" "}
+        <strong className="font-medium text-gray-700">Pending</strong>; your auditors then scan each item, check its label
+        against the system, count it, and document anything that&apos;s wrong right there.
       </p>
 
       <div className="mt-6 rounded-lg border border-gray-200 bg-white p-6">

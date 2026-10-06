@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { saveLine, withdrawDiscrepancy } from "../actions";
-import { fmtQty, isMismatch, type LineView } from "@/lib/ia/audit-rules";
-
-type Category = { id: string; name: string };
+import { saveLine } from "../actions";
+import {
+  FIELD_DEFS, LABEL_CHECK_FIELDS, WHOLE_LABEL_ISSUES, fieldDef, fieldLabel, fmtQty, isMismatch,
+  type FlagField, type LineView,
+} from "@/lib/ia/audit-rules";
 
 const STATUS_STYLE = {
   PENDING: "border-gray-200 bg-white",
@@ -17,11 +18,9 @@ const STATUS_STYLE = {
 const input = "w-full rounded-lg border border-gray-300 px-3 py-2 text-base";
 
 export default function AuditBoard({
-  lines, categories, defaultCategoryId, canEdit, openId,
+  lines, canEdit, openId,
 }: {
   lines: LineView[];
-  categories: Category[];
-  defaultCategoryId: string;
   canEdit: boolean;
   openId: string | null; // a scan that matched exactly one line opens it straight away
 }) {
@@ -37,7 +36,7 @@ export default function AuditBoard({
   const active = shown.find((l) => l.id === activeId) ?? null;
 
   // Other auditors are counting in the same audit: pick up their work every
-  // 20 seconds while this screen is idle (not while a count is being entered).
+  // 20 seconds while this screen is idle (not while an item is open).
   useEffect(() => {
     if (activeId) return;
     const t = setInterval(() => {
@@ -48,7 +47,7 @@ export default function AuditBoard({
 
   function afterSave(line: LineView) {
     setSaved((prev) => ({ ...prev, [line.id]: line }));
-    // Move on to the next uncounted line in this list.
+    // Move on to the next uncounted item in this list.
     const i = shown.findIndex((l) => l.id === line.id);
     const next = [...shown.slice(i + 1), ...shown.slice(0, i)].find((l) => (saved[l.id] ?? l).status === "PENDING" && l.id !== line.id);
     setActiveId(next ? next.id : null);
@@ -62,7 +61,7 @@ export default function AuditBoard({
           <li key={l.id}>
             <button
               type="button"
-              disabled={!canEdit && l.status === "PENDING"}
+              disabled={!canEdit}
               onClick={() => setActiveId(l.id)}
               className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left shadow-sm active:scale-[0.99] ${STATUS_STYLE[l.status]} ${canEdit ? "hover:border-black" : ""}`}
             >
@@ -70,14 +69,14 @@ export default function AuditBoard({
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-base font-medium text-gray-900">{l.product ?? l.strain ?? l.batchId ?? l.pid ?? `Line ${l.position}`}</span>
                 <span className="block truncate text-xs text-gray-500">
-                  {[l.product ? l.strain : null, l.batchId && `Batch ${l.batchId}`, l.pid && `PID ${l.pid}`, l.serialNo && `Serial ${l.serialNo}`, l.room].filter(Boolean).join(" · ")}
+                  {[l.pid && `PID ${l.pid}`, l.batchId && `Batch ${l.batchId}`, l.serialNo && `Tag ${l.serialNo}`, l.room].filter(Boolean).join(" · ")}
                 </span>
               </span>
               <span className="shrink-0 text-right">
                 <span className="block text-xs text-gray-400">System</span>
                 <span className="block text-base font-semibold tabular-nums text-gray-900">{fmtQty(l.systemQty, l.unit)}</span>
               </span>
-              <span className="w-24 shrink-0 text-right">
+              <span className="w-28 shrink-0 text-right">
                 {l.status === "PENDING" ? (
                   <span className="text-sm text-gray-400">Pending</span>
                 ) : (
@@ -86,7 +85,8 @@ export default function AuditBoard({
                       {fmtQty(l.actualQty)}
                     </span>
                     <span className="block truncate text-xs text-gray-500">
-                      {l.status === "DISCREPANCY" ? "Discrepancy" : "OK"}{l.countedByName ? ` · ${l.countedByName.split(" ")[0]}` : ""}
+                      {l.issues.length > 0 ? `${l.issues.length} issue${l.issues.length === 1 ? "" : "s"}` : "OK"}
+                      {l.countedByName ? ` · ${l.countedByName.split(" ")[0]}` : ""}
                     </span>
                   </>
                 )}
@@ -95,55 +95,58 @@ export default function AuditBoard({
           </li>
         ))}
         {shown.length === 0 && (
-          <li className="rounded-xl border border-gray-200 bg-white px-4 py-10 text-center text-sm text-gray-400">No lines match.</li>
+          <li className="rounded-xl border border-gray-200 bg-white px-4 py-10 text-center text-sm text-gray-400">No items match.</li>
         )}
       </ul>
 
       {active && canEdit && (
-        <CountPanel
-          key={`${active.id}:${active.version}`}
-          line={active}
-          categories={categories}
-          defaultCategoryId={defaultCategoryId}
-          onClose={() => setActiveId(null)}
-          onSaved={afterSave}
-        />
+        <ItemPanel key={`${active.id}:${active.version}`} line={active} onClose={() => setActiveId(null)} onSaved={afterSave} />
       )}
     </>
   );
 }
 
-function CountPanel({
-  line, categories, defaultCategoryId, onClose, onSaved,
-}: {
-  line: LineView;
-  categories: Category[];
-  defaultCategoryId: string;
-  onClose: () => void;
-  onSaved: (line: LineView) => void;
-}) {
+type Flag = { foundValue: string; note: string };
+
+function ItemPanel({ line, onClose, onSaved }: { line: LineView; onClose: () => void; onSaved: (line: LineView) => void }) {
   const [qty, setQty] = useState(line.actualQty !== null ? String(line.actualQty) : "");
-  const [flag, setFlag] = useState(line.status === "DISCREPANCY" && !isMismatch(line.systemQty, line.actualQty));
-  const [categoryId, setCategoryId] = useState(defaultCategoryId);
-  const [note, setNote] = useState(line.note ?? "");
+  const [labelOk, setLabelOk] = useState(line.labelVerified);
+  const [flags, setFlags] = useState<Record<string, Flag>>(() =>
+    Object.fromEntries(line.issues.filter((i) => i.field !== "COUNT").map((i) => [i.field, { foundValue: i.foundValue ?? "", note: i.note ?? "" }]))
+  );
+  const [countNote, setCountNote] = useState(line.issues.find((i) => i.field === "COUNT")?.note ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState<string | null>(null);
 
   const entered = qty.trim() === "" ? null : Number(qty);
-  const valid = entered === null || (Number.isFinite(entered) && entered >= 0);
-  const mismatch = isMismatch(line.systemQty, valid ? entered : null);
-  const documenting = mismatch || flag;
+  const validCount = entered !== null && Number.isFinite(entered) && entered >= 0;
+  const mismatch = validCount && isMismatch(line.systemQty, entered);
   const diff = mismatch && entered !== null && line.systemQty !== null ? entered - line.systemQty : 0;
+  const flagCount = Object.keys(flags).length;
+  const canSave = validCount && (labelOk || flagCount > 0);
 
-  async function submit(force = false, quickQty?: number) {
+  const toggle = (field: FlagField) =>
+    setFlags((prev) => {
+      const next = { ...prev };
+      if (next[field]) delete next[field];
+      else next[field] = { foundValue: "", note: "" };
+      return next;
+    });
+  const setFlag = (field: FlagField, patch: Partial<Flag>) => setFlags((prev) => ({ ...prev, [field]: { ...prev[field], ...patch } }));
+
+  async function submit(force = false) {
     setBusy(true);
     setError(null);
     setConflict(null);
-    const actual = quickQty ?? (valid ? entered : null);
     const r = await saveLine({
-      lineId: line.id, actualQty: actual, version: line.version, force,
-      discrepancy: quickQty === undefined && (isMismatch(line.systemQty, actual) || flag) ? { categoryId, note: note.trim() || null } : undefined,
+      lineId: line.id,
+      actualQty: validCount ? entered : null,
+      labelVerified: labelOk,
+      countNote: mismatch ? countNote.trim() || null : null,
+      issues: Object.entries(flags).map(([field, f]) => ({ field: field as FlagField, foundValue: f.foundValue.trim() || null, note: f.note.trim() || null })),
+      version: line.version,
+      force,
     });
     setBusy(false);
     if (r.ok) return onSaved(r.line);
@@ -151,76 +154,98 @@ function CountPanel({
     setError(r.error);
   }
 
-  async function withdraw() {
-    setBusy(true);
-    setError(null);
-    const r = await withdrawDiscrepancy(line.id);
-    setBusy(false);
-    if (r.ok) onSaved(r.line);
-    else setError(r.error);
-  }
-
-  const label = line.product ?? line.strain ?? line.batchId ?? line.pid ?? `Line ${line.position}`;
+  const systemValue = (f: FlagField) => fieldDef(f)?.read?.(line) ?? null;
 
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/50 sm:items-center" onClick={onClose}>
-      <div
-        className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-2xl sm:max-w-md sm:rounded-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="max-h-[94vh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-2xl sm:max-w-lg sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-lg font-semibold text-gray-900">{label}</p>
-            <p className="text-xs text-gray-500">
-              {[line.product ? line.strain : null, line.batchId && `Batch ${line.batchId}`, line.pid && `PID ${line.pid}`, line.serialNo && `Serial ${line.serialNo}`, line.room].filter(Boolean).join(" · ")}
-            </p>
+            <p className="text-lg font-semibold leading-tight text-gray-900">{line.product ?? line.strain ?? line.batchId ?? `Line ${line.position}`}</p>
+            {line.pid && <p className="mt-0.5 font-mono text-sm text-gray-600">PID {line.pid}</p>}
           </div>
           <button type="button" onClick={onClose} className="shrink-0 rounded-full px-2 py-1 text-xl leading-none text-gray-400 hover:text-gray-700" aria-label="Close">×</button>
         </div>
 
-        <div className="mt-4 rounded-xl bg-gray-50 p-3 text-center">
-          <p className="text-xs uppercase tracking-wide text-gray-400">System says</p>
-          <p className="text-3xl font-semibold tabular-nums text-gray-900">{fmtQty(line.systemQty, line.unit)}</p>
+        {/* 1. The label */}
+        <div className="mt-4 flex items-center justify-between">
+          <p className="text-sm font-medium text-gray-800">1. Check the label against the system</p>
+          <button
+            type="button"
+            onClick={() => setLabelOk((v) => !v)}
+            className={`rounded-full px-3 py-1 text-xs font-semibold ${labelOk ? "bg-[#134229] text-white" : "border border-gray-300 text-gray-700"}`}
+          >
+            {labelOk ? "✓ Label matches" : flagCount > 0 ? "Rest of label matches" : "Label matches"}
+          </button>
         </div>
+        <ul className="mt-2 divide-y divide-gray-100 rounded-xl border border-gray-200">
+          {LABEL_CHECK_FIELDS.map((field) => {
+            const flagged = flags[field];
+            const sys = systemValue(field);
+            return (
+              <li key={field} className={flagged ? "bg-red-50" : ""}>
+                <div className="flex items-center gap-2 px-3 py-2">
+                  <span className="w-28 shrink-0 text-xs font-medium uppercase tracking-wide text-gray-400">{fieldLabel(field)}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm text-gray-900">{sys ?? "—"}</span>
+                  <button
+                    type="button"
+                    onClick={() => toggle(field)}
+                    aria-pressed={!!flagged}
+                    className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-semibold ${flagged ? "bg-red-600 text-white" : "border border-gray-300 text-gray-600 hover:bg-gray-50"}`}
+                  >
+                    {flagged ? "Wrong ✗" : "Wrong?"}
+                  </button>
+                </div>
+                {flagged && (
+                  <div className="space-y-2 px-3 pb-3">
+                    <input value={flagged.foundValue} onChange={(e) => setFlag(field, { foundValue: e.target.value })} placeholder={`What does the label show for ${fieldLabel(field).toLowerCase()}?`} className={input} />
+                    <input value={flagged.note} onChange={(e) => setFlag(field, { note: e.target.value })} placeholder="Note (optional)" className={input} />
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {WHOLE_LABEL_ISSUES.map((field) => (
+            <button
+              key={field}
+              type="button"
+              onClick={() => toggle(field)}
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${flags[field] ? "bg-red-600 text-white" : "border border-gray-300 text-gray-600 hover:bg-gray-50"}`}
+            >
+              {FIELD_DEFS.find((d) => d.key === field)!.label}
+            </button>
+          ))}
+        </div>
+        {WHOLE_LABEL_ISSUES.filter((f) => flags[f]).map((field) => (
+          <input key={field} value={flags[field].note} onChange={(e) => setFlag(field, { note: e.target.value })} placeholder={`${fieldLabel(field)} — describe it`} className={`${input} mt-2`} />
+        ))}
 
-        {line.findingId && (
-          <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-            A finding is documented for this line.{" "}
-            <Link href={`/inventory-audit/findings/${line.findingId}`} className="font-medium underline">View it</Link>
-          </p>
-        )}
-
-        <label className="mt-4 block text-sm font-medium text-gray-700">What did you count?</label>
-        <input
-          autoFocus
-          inputMode="decimal"
-          value={qty}
-          onChange={(e) => setQty(e.target.value.replace(/[^\d.]/g, ""))}
-          onKeyDown={(e) => { if (e.key === "Enter" && !busy && valid && !(documenting && !categoryId)) void submit(); }}
-          placeholder="Physical count"
-          className={`${input} mt-1 text-center text-2xl font-semibold tabular-nums`}
-        />
-        {entered !== null && valid && line.systemQty !== null && (
-          <p className={`mt-1 text-center text-sm font-medium ${mismatch ? "text-red-700" : "text-[#134229]"}`}>
-            {mismatch ? `${diff > 0 ? "+" : ""}${Math.round(diff * 1000) / 1000} — doesn't match` : "Matches"}
-          </p>
-        )}
-
-        {!mismatch && !line.findingId && (
-          <label className="mt-3 flex items-start gap-2 text-sm text-gray-700">
-            <input type="checkbox" checked={flag} onChange={(e) => setFlag(e.target.checked)} className="mt-1 h-4 w-4" />
-            <span>Flag a problem anyway (wrong tag, room, status, label…)</span>
-          </label>
-        )}
-
-        {documenting && (
-          <div className="mt-3 space-y-2 rounded-xl border border-red-200 bg-red-50 p-3">
-            <p className="text-sm font-medium text-red-800">Document the discrepancy</p>
-            <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={input} aria-label="Kind of discrepancy">
-              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-            <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="What did you see? (optional)" className={input} />
+        {/* 2. The count */}
+        <p className="mt-5 text-sm font-medium text-gray-800">2. Count it</p>
+        <div className="mt-2 flex items-center gap-3">
+          <div className="w-32 shrink-0 rounded-xl bg-gray-50 p-3 text-center">
+            <p className="text-xs uppercase tracking-wide text-gray-400">System</p>
+            <p className="text-xl font-semibold tabular-nums text-gray-900">{fmtQty(line.systemQty, line.unit)}</p>
+            {line.allocatedQty ? <p className="text-xs text-gray-400">{fmtQty(line.allocatedQty)} allocated</p> : null}
           </div>
+          <input
+            inputMode="decimal"
+            value={qty}
+            onChange={(e) => setQty(e.target.value.replace(/[^\d.]/g, ""))}
+            placeholder="Counted"
+            autoFocus
+            className={`${input} text-center text-2xl font-semibold tabular-nums`}
+          />
+        </div>
+        {validCount && line.systemQty !== null && (
+          <p className={`mt-1 text-center text-sm font-medium ${mismatch ? "text-red-700" : "text-[#134229]"}`}>
+            {mismatch ? `${diff > 0 ? "+" : ""}${Math.round(diff * 1000) / 1000} — doesn't match the system` : "Matches the system"}
+          </p>
+        )}
+        {mismatch && (
+          <textarea value={countNote} onChange={(e) => setCountNote(e.target.value)} rows={2} placeholder="What happened? (optional)" className={`${input} mt-2`} />
         )}
 
         {conflict && (
@@ -231,28 +256,34 @@ function CountPanel({
         )}
         {error && <p className="mt-3 text-sm text-red-700">{error}</p>}
 
-        <div className="mt-4 grid gap-2">
-          <button
-            type="button"
-            disabled={busy || !valid || (documenting && !categoryId)}
-            onClick={() => submit()}
-            className="rounded-xl border border-black bg-black py-3 text-base font-semibold text-white disabled:opacity-40"
-          >
-            {busy ? "Saving…" : documenting ? "Save discrepancy & next" : "Save count & next"}
-          </button>
-          {line.systemQty !== null && !line.findingId && (
-            <button type="button" disabled={busy} onClick={() => submit(false, line.systemQty!)} className="rounded-xl border border-gray-300 bg-white py-3 text-base font-medium text-gray-800 disabled:opacity-40">
-              Matches the system ({fmtQty(line.systemQty, line.unit)})
-            </button>
-          )}
-          {line.findingId && (
-            <button type="button" disabled={busy} onClick={withdraw} className="rounded-xl border border-gray-300 bg-white py-2.5 text-sm font-medium text-gray-700 disabled:opacity-40">
-              Counted wrong — withdraw this discrepancy
-            </button>
-          )}
-        </div>
+        {(mismatch || flagCount > 0) && (
+          <p className="mt-3 text-center text-xs text-red-700">
+            {(mismatch ? 1 : 0) + flagCount} discrepanc{(mismatch ? 1 : 0) + flagCount === 1 ? "y" : "ies"} will be documented with the time found
+          </p>
+        )}
+        <button
+          type="button"
+          disabled={busy || !canSave}
+          onClick={() => submit()}
+          className="mt-3 w-full rounded-xl border border-black bg-black py-3 text-base font-semibold text-white disabled:opacity-40"
+        >
+          {busy ? "Saving…" : "Save & next"}
+        </button>
+        {!canSave && <p className="mt-2 text-center text-xs text-gray-400">{!validCount ? "Enter the count to save." : "Confirm the label matches, or mark what's wrong."}</p>}
+
+        {line.issues.length > 0 && (
+          <div className="mt-4 border-t border-gray-100 pt-3 text-xs text-gray-500">
+            {line.issues.map((i) => (
+              <p key={i.id}>
+                <Link href={`/inventory-audit/findings/${i.id}`} className="font-medium text-gray-700 underline">{fieldLabel(i.field)}</Link>{" "}
+                found {new Date(i.foundAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}
+                {i.reviewed ? " · reviewed" : " · awaiting review"}
+              </p>
+            ))}
+          </div>
+        )}
         {line.countedByName && line.countedAt && (
-          <p className="mt-3 text-center text-xs text-gray-400">
+          <p className="mt-2 text-center text-xs text-gray-400">
             Last saved by {line.countedByName} · {new Date(line.countedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}
           </p>
         )}

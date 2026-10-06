@@ -578,7 +578,8 @@ model VendorCredit {
 // their locations/departments, ADMIN does both and configures the module.
 enum AuditRole {
   AUDITOR
-  MANAGER
+  AUDIT_MANAGER // creates audits, triages their findings, runs the adjustments report
+  MANAGER // a department manager findings get routed to
   ADMIN
 }
 
@@ -627,6 +628,8 @@ model User {
   iaAuditsCreated     IaAudit[]        @relation("IaAuditCreator")
   iaAuditsCompleted   IaAudit[]        @relation("IaAuditCompleter")
   iaAuditLinesCounted IaAuditLine[]    @relation("IaAuditLineCounter")
+  iaFindingsReviewed  IaFinding[]      @relation("IaFindingReviewer")
+  iaFindingsAdjusted  IaFinding[]      @relation("IaFindingAdjuster")
 }
 
 model Session {
@@ -802,11 +805,34 @@ model IaFinding {
   events IaFindingEvent[]
 
   // Set when the finding was documented while working through an audit.
-  audit     IaAudit?     @relation(fields: [auditId], references: [id], onDelete: SetNull)
-  auditId   String?
-  auditLine IaAuditLine?
+  audit       IaAudit?     @relation(fields: [auditId], references: [id], onDelete: SetNull)
+  auditId     String?
+  auditLine   IaAuditLine? @relation(fields: [auditLineId], references: [id], onDelete: SetNull)
+  auditLineId String?
+
+  // Documented while auditing: which field was wrong, what the system says
+  // versus what was found, and when in the audit it happened.
+  flaggedField String? // COUNT, BATCH, PID, HARVEST_DATE, ... (see src/lib/ia/audit-rules.ts)
+  systemValue  String?
+  foundValue   String?
+  foundAt      DateTime @default(now())
+
+  // An audit manager reviews what the auditors captured and fills in the rest.
+  needsReview  Boolean   @default(false)
+  reviewedAt   DateTime?
+  reviewedBy   User?     @relation("IaFindingReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedById String?
+
+  // What has to change as a result, and whether it has been done.
+  adjustmentStatus IaAdjustmentStatus  @default(NOT_NEEDED)
+  adjustmentTarget IaAdjustmentTarget?
+  adjustmentNote   String?
+  adjustedAt       DateTime?
+  adjustedBy       User?               @relation("IaFindingAdjuster", fields: [adjustedById], references: [id], onDelete: SetNull)
+  adjustedById     String?
 
   @@index([auditId])
+  @@index([auditLineId])
   @@index([status])
   @@index([facilityId])
   @@index([departmentId])
@@ -912,14 +938,21 @@ model IaAuditLine {
   auditId  String
   position Int // order in the uploaded file
 
-  product  String?
-  batchId  String?
-  pid      String?
-  strain   String?
-  room     String?
-  serialNo String?
-  unit     String?
-  category String? // the product's own category (Edible Gummies, ...), not a finding category
+  product         String?
+  batchId         String?
+  pid             String?
+  strain          String?
+  room            String?
+  serialNo        String?
+  unit            String?
+  category        String? // the product's own category (Edible Gummies, ...), not a finding category
+  // Label details from the Dutchie export, shown to the auditor to check against the label.
+  itemStatus      String?
+  harvestDate     String?
+  expirationDate  String?
+  manufactureDate String?
+  allocatedQty    Float?
+  labelVerified   Boolean @default(false) // the auditor confirmed the label matches (or flagged what doesn't)
 
   systemQty Float? // what the system says (from the upload)
   actualQty Float? // what was counted; null until counted
@@ -931,8 +964,7 @@ model IaAuditLine {
   countedById String?
   countedAt   DateTime?
 
-  finding   IaFinding? @relation(fields: [findingId], references: [id], onDelete: SetNull)
-  findingId String?    @unique
+  findings IaFinding[]
 
   // Also the version used to catch two people saving the same line at once.
   updatedAt DateTime @updatedAt
@@ -940,4 +972,17 @@ model IaAuditLine {
   @@index([auditId, status])
   @@index([auditId, room])
   @@index([auditId, position])
+}
+
+enum IaAdjustmentStatus {
+  NOT_NEEDED
+  PENDING // a correction is needed
+  APPLIED // the correction has been made
+}
+
+// What the correction is made to.
+enum IaAdjustmentTarget {
+  SYSTEM // fix it in Dutchie
+  LABEL // fix the label / the product
+  BOTH
 }

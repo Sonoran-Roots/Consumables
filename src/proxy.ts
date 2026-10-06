@@ -67,6 +67,6 @@ function redirectToSignIn(request: NextRequest) {
 export const config = {
   // jars-logo.png has to load on the signed-out sign-in page too.
   matcher: [
-    "/((?!api/auth|sign-in|sign-up|_next/static|_next/image|favicon.ico|jars-logo.png).*)",
+    "/((?!api/auth|api/health|sign-in|sign-up|_next/static|_next/image|favicon.ico|jars-logo.png).*)",
   ],
 };

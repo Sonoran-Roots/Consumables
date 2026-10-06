@@ -6,6 +6,7 @@
 import { parse } from "csv-parse/sync";
 import { MAX_ROWS, pick, type Row } from "./csv";
 import { squash } from "./lookup";
+import { parseFlexibleDate, toDateInput } from "./dates";
 
 export type ParsedLine = {
   position: number;
@@ -17,7 +18,21 @@ export type ParsedLine = {
   serialNo: string | null;
   unit: string | null;
   category: string | null;
+  itemStatus: string | null;
+  harvestDate: string | null;
+  expirationDate: string | null;
+  manufactureDate: string | null;
+  allocatedQty: number | null;
   systemQty: number | null;
+};
+
+// Dates on a label are compared as text, so a recognisable date is normalised
+// to YYYY-MM-DD (the export and the label are then compared like for like);
+// anything else is kept exactly as written.
+const dateText = (raw: string): string | null => {
+  if (!raw) return null;
+  const d = parseFlexibleDate(raw);
+  return d ? toDateInput(d) : raw;
 };
 
 export type ParsedAudit = {
@@ -60,7 +75,7 @@ function systemQuantity(row: Row): { value: number | null; unit: string | null }
 const KNOWN_HEADERS = new Set([
   "product", "productname", "item", "batch", "batchid", "harvestbatch", "pid", "strain", "serialno", "serial", "serialnumber",
   "tags", "tag", "room", "location", "unit", "uom", "type", "category", "count", "qty", "quantity", "dutchie", "available",
-  "systemqty", "system", "actual", "subroom", "stage",
+  "systemqty", "system", "actual", "subroom", "stage", "harvestdate", "expirationdate",
 ]);
 const isKnownHeader = (h: string) => KNOWN_HEADERS.has(h) || h.startsWith("qtyinc");
 
@@ -123,6 +138,11 @@ export function parseAuditLines(text: string): ParsedAudit {
       room: pick(row, ["room", "location"]) || null,
       unit: pick(row, ["unit", "uom", "type"]) || qty.unit,
       category: pick(row, ["category"]) || null,
+      itemStatus: pick(row, ["status", "itemstatus"]) || null,
+      harvestDate: dateText(pick(row, ["harvestdate", "harvested"])),
+      expirationDate: dateText(pick(row, ["expirationdate", "expiration", "expiry", "expirydate"])),
+      manufactureDate: dateText(pick(row, ["dateofmanufacture", "manufacturedate", "manufactured"])),
+      allocatedQty: readQuantity(pick(row, ["allocatedqty", "allocated"])).value,
       systemQty: qty.value,
     });
   }

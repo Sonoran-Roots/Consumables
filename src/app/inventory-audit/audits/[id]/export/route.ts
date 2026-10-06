@@ -2,10 +2,11 @@ import { db } from "@/lib/db";
 import { getAuditSession } from "@/lib/ia/auth";
 import { csvCell as cell } from "@/lib/ia/csv";
 import { toDateInput } from "@/lib/ia/dates";
+import { fieldLabel } from "@/lib/ia/audit-rules";
 import { CAN_ENTER_FINDINGS } from "@/lib/ia/workflow";
 
-// The audit's lines with their counts — the tracker-style record of what was
-// audited, who counted it, and where a discrepancy was documented.
+// Everything audited, line by line: the system's details, what was counted, who
+// counted it and when, whether the label was verified, and what was flagged.
 export async function GET(_request: Request, ctx: RouteContext<"/inventory-audit/audits/[id]/export">) {
   if (!(await getAuditSession(CAN_ENTER_FINDINGS))) return new Response("Forbidden", { status: 403 });
   const { id } = await ctx.params;
@@ -14,14 +15,21 @@ export async function GET(_request: Request, ctx: RouteContext<"/inventory-audit
 
   const lines = await db.iaAuditLine.findMany({
     where: { auditId: id }, orderBy: { position: "asc" },
-    include: { countedBy: { select: { name: true, email: true } }, finding: { select: { status: true, description: true } } },
+    include: { countedBy: { select: { name: true, email: true } }, findings: { orderBy: { foundAt: "asc" }, select: { flaggedField: true, foundValue: true, status: true } } },
   });
-  const header = ["#", "Product", "Batch", "PID", "Strain", "Room", "Serial No", "Unit", "Product Category", "System Qty", "Counted Qty", "Difference", "Status", "Counted By", "Counted At", "Note", "Finding Status", "Finding"];
+  const header = [
+    "#", "Product", "Package ID (PID)", "Batch", "Strain", "Tag", "Room", "Unit", "Product Category", "Dutchie Status",
+    "Harvest Date", "Expiration Date", "Date of Manufacture", "System Qty", "Allocated Qty", "Counted Qty", "Difference",
+    "Result", "Label Verified", "Issues Flagged", "Counted By", "Counted At",
+  ];
   const rows = lines.map((l) => [
-    l.position, l.product, l.batchId, l.pid, l.strain, l.room, l.serialNo, l.unit, l.category, l.systemQty, l.actualQty,
+    l.position, l.product, l.pid, l.batchId, l.strain, l.serialNo, l.room, l.unit, l.category, l.itemStatus,
+    l.harvestDate, l.expirationDate, l.manufactureDate, l.systemQty, l.allocatedQty, l.actualQty,
     l.systemQty !== null && l.actualQty !== null ? Math.round((l.actualQty - l.systemQty) * 1000) / 1000 : "",
-    l.status, l.countedBy ? l.countedBy.name || l.countedBy.email : "", l.countedAt ? l.countedAt.toISOString() : "", l.note,
-    l.finding?.status ?? "", l.finding?.description ?? "",
+    l.status === "PENDING" ? "Not audited" : l.status === "OK" ? "OK" : "Discrepancy",
+    l.labelVerified ? "yes" : "",
+    l.findings.map((f) => `${fieldLabel(f.flaggedField)}${f.foundValue ? ` (label: ${f.foundValue})` : ""}`).join("; "),
+    l.countedBy ? l.countedBy.name || l.countedBy.email : "", l.countedAt ? l.countedAt.toISOString() : "",
   ].map(cell).join(","));
   const slug = audit.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "audit";
   return new Response([header.map(cell).join(","), ...rows].join("\r\n"), {
