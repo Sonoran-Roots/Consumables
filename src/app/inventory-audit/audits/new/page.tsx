@@ -21,7 +21,9 @@ export default async function NewAuditPage() {
       <div className="mt-6 rounded-lg border border-gray-200 bg-white p-6">
         <h2 className="text-sm font-medium text-gray-700">What the file needs</h2>
         <p className="mt-1 text-sm text-gray-500">
-          A header row, then one row per line. Recognised columns: <code>Product</code>, <code>Batch</code>,{" "}
+          Either Dutchie export works: the <strong className="font-medium text-gray-700">audit table</strong> (retail audits) or the full{" "}
+          <strong className="font-medium text-gray-700">Inventory</strong> download (production and distribution audits, counted by weight or by
+          unit). Excel-style cells like <code>=&quot;value&quot;</code> are handled. A header row, then one row per line. Recognised columns: <code>Product</code>, <code>Batch</code>,{" "}
           <code>PID</code>, <code>Strain</code>, <code>Room</code>, <code>Serial No</code> (or <code>Tags</code>),{" "}
           <code>Unit</code>, <code>Category</code>, and the system count (<code>Qty (Inc. allocated)</code> or{" "}
           <code>Available</code>). A title row above the headers, repeated header rows and month or section

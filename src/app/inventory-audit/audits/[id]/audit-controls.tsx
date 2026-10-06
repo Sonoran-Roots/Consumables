@@ -16,7 +16,7 @@ export default function AuditControls({
   canRun: boolean; // an audit manager: complete / reopen
   canDelete: boolean; // an admin
   exportHref: string;
-  dutchieExportHref: string;
+  dutchieExportHref: string | null; // null for audits that aren't run as Dutchie audit tables
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -53,7 +53,7 @@ export default function AuditControls({
   return (
     <div className="flex flex-wrap items-center gap-2">
       <a href={exportHref} className={btn}>Download CSV</a>
-      <a href={dutchieExportHref} className={btn} title="The counts and reasons in the same table format Dutchie uses">Dutchie table</a>
+      {dutchieExportHref && <a href={dutchieExportHref} className={btn} title="The counts and reasons in the same table format Dutchie uses">Dutchie table</a>}
       {status === "IN_PROGRESS" && canRun && (
         <button type="button" disabled={busy} className={primary} onClick={complete}>
           {pending > 0 ? "Complete audit…" : "Complete audit"}

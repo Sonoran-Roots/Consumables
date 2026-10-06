@@ -38,6 +38,9 @@ export default async function AuditPage({ params, searchParams }: PageProps<"/in
   const page = Math.max(1, Number(one(sp.page)) || 1);
   const canEdit = audit.status === "IN_PROGRESS";
   const canRun = CAN_RUN_AUDITS.includes(me.role);
+  // Retail audits are run as Dutchie audit tables (an initial table out, a completed one back).
+  // Production and distribution audits are counted from the inventory download instead.
+  const dutchieTable = !audit.dutchieType || audit.dutchieType === "RETAIL";
 
   const qs = (over: Record<string, string>) => {
     const u = new URLSearchParams();
@@ -178,7 +181,7 @@ export default async function AuditPage({ params, searchParams }: PageProps<"/in
           auditId={id} status={audit.status} pending={stats.pending}
           canRun={canRun} canDelete={CAN_CONFIGURE.includes(me.role)}
           exportHref={`/inventory-audit/audits/${id}/export`}
-          dutchieExportHref={`/inventory-audit/audits/${id}/export?format=dutchie`}
+          dutchieExportHref={dutchieTable ? `/inventory-audit/audits/${id}/export?format=dutchie` : null}
         />
       </div>
 
@@ -207,7 +210,7 @@ export default async function AuditPage({ params, searchParams }: PageProps<"/in
         </div>
       )}
 
-      {canRun && canEdit && <div className="mt-4"><CountsUpload auditId={id} /></div>}
+      {canRun && canEdit && dutchieTable && <div className="mt-4"><CountsUpload auditId={id} /></div>}
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         {tab("pending", "Pending", stats.pending)}

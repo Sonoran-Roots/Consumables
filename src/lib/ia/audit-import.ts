@@ -37,6 +37,14 @@ const dateText = (raw: string): string | null => {
   return d ? toDateInput(d) : raw;
 };
 
+// Dutchie's Inventory export has a Type column of "Qty" (counted in units) or
+// "Wgt" (counted by weight, in grams). Other values (a plant tab's "Plant" or
+// "Clones") are kept as written.
+const typeUnit = (type: string): string | null => {
+  const t = type.trim().toLowerCase();
+  return t === "wgt" ? "g" : t === "qty" ? "qty" : type.trim() || null;
+};
+
 export type ParsedAudit = {
   lines: ParsedLine[];
   skippedHeaders: number; // section/month header rows and blanks that aren't auditable lines
@@ -54,7 +62,7 @@ export function readQuantity(raw: string): { value: number | null; unit: string 
 // Several columns can hold a count (the product tabs have both "Available" and
 // "Qty (Inc. allocated)"); the first group with a value wins, most specific first.
 const QTY_GROUPS: { exact: string[]; prefix: string[] }[] = [
-  { exact: [], prefix: ["qtyinc"] },
+  { exact: [], prefix: ["quantityincluding", "qtyinc"] },
   { exact: ["expectedqty", "systemqty", "system", "dutchie", "count", "quantity", "qty"], prefix: [] },
   { exact: ["available"], prefix: [] },
 ];
@@ -79,16 +87,20 @@ const KNOWN_HEADERS = new Set([
   "tags", "tag", "room", "location", "unit", "uom", "type", "category", "count", "qty", "quantity", "dutchie", "available",
   "systemqty", "system", "actual", "subroom", "stage", "harvestdate", "expirationdate", "packageid", "expectedqty", "countedqty", "brand",
 ]);
-const isKnownHeader = (h: string) => KNOWN_HEADERS.has(h) || h.startsWith("qtyinc");
+const isKnownHeader = (h: string) => KNOWN_HEADERS.has(h) || h.startsWith("qtyinc") || h.startsWith("quantityincluding");
 
 // Raw table -> rows keyed by squashed header. Skips everything above the
 // header row, and any later row that just repeats the headers (the trackers
 // repeat them above each section). When two columns share a name (the flower
 // tab has two "Strain" columns) the first one with a value wins.
 export function readTable(text: string): { rows: Row[]; error?: string } {
+  // Dutchie's Inventory export wraps every cell as ="value" (Excel's way of
+  // keeping a value as text). Turn that into ordinary CSV quoting first, so a
+  // value containing a comma stays in one cell.
+  const normalized = /(^|,)="/m.test(text) ? text.replace(/(^|,)="/gm, '$1"') : text;
   let table: string[][];
   try {
-    table = parse(text, { bom: true, columns: false, skip_empty_lines: true, trim: true, relax_column_count: true });
+    table = parse(normalized, { bom: true, columns: false, skip_empty_lines: true, trim: true, relax_column_count: true });
   } catch (e) {
     return { rows: [], error: `Could not parse the file as CSV: ${(e as Error).message}` };
   }
@@ -138,13 +150,13 @@ export function parseAuditLines(text: string): ParsedAudit {
       position: lines.length + 1,
       product, strain, batchId, pid, serialNo,
       room: pick(row, ["room", "location"]) || null,
-      unit: pick(row, ["unit", "uom", "type"]) || qty.unit,
+      unit: pick(row, ["unit", "uom"]) || qty.unit || readQuantity(pick(row, ["available"])).unit || typeUnit(pick(row, ["type"])),
       category: pick(row, ["category"]) || null,
       itemStatus: pick(row, ["status", "itemstatus"]) || null,
       harvestDate: dateText(pick(row, ["harvestdate", "harvested"])),
       expirationDate: dateText(pick(row, ["expirationdate", "expiration", "expiry", "expirydate"])),
       manufactureDate: dateText(pick(row, ["dateofmanufacture", "manufacturedate", "manufactured"])),
-      allocatedQty: readQuantity(pick(row, ["allocatedqty", "allocated"])).value,
+      allocatedQty: readQuantity(pick(row, ["allocatedqty", "allocatedquantity", "allocated"])).value,
       systemQty: qty.value,
       dutchieId: pick(row, ["id"]) || null,
       brand: pick(row, ["brand"]) || null,
