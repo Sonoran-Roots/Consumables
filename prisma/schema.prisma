@@ -618,12 +618,15 @@ model User {
   employee Employee?
 
   // Inventory Audit module (Ia* models below) — people on findings.
-  iaFindingsAssigned IaFinding[]      @relation("IaFindingAssignee")
-  iaFindingsCreated  IaFinding[]      @relation("IaFindingCreator")
-  iaFindingsResolved IaFinding[]      @relation("IaFindingResolver")
-  iaFindingsVerified IaFinding[]      @relation("IaFindingVerifier")
-  iaFindingEvents    IaFindingEvent[]
-  iaCoverage         IaCoverage[]     @relation("IaCoverageUser")
+  iaFindingsAssigned  IaFinding[]      @relation("IaFindingAssignee")
+  iaFindingsCreated   IaFinding[]      @relation("IaFindingCreator")
+  iaFindingsResolved  IaFinding[]      @relation("IaFindingResolver")
+  iaFindingsVerified  IaFinding[]      @relation("IaFindingVerifier")
+  iaFindingEvents     IaFindingEvent[]
+  iaCoverage          IaCoverage[]     @relation("IaCoverageUser")
+  iaAuditsCreated     IaAudit[]        @relation("IaAuditCreator")
+  iaAuditsCompleted   IaAudit[]        @relation("IaAuditCompleter")
+  iaAuditLinesCounted IaAuditLine[]    @relation("IaAuditLineCounter")
 }
 
 model Session {
@@ -696,6 +699,7 @@ model IaFacility {
 
   findings IaFinding[]
   coverage IaCoverage[]
+  audits   IaAudit[]
 }
 
 // The department a finding is attributed to (who has to fix it).
@@ -709,6 +713,7 @@ model IaDepartment {
   findings       IaFinding[]  @relation("IaFindingDept")
   findingsSecond IaFinding[]  @relation("IaFindingDept2")
   coverage       IaCoverage[]
+  auditsDefault  IaAudit[]    @relation("IaAuditDefaultDept")
 }
 
 // e.g. "Internal Process", "AZDHS Compliance". defaultDueDays sets a finding's
@@ -796,6 +801,12 @@ model IaFinding {
 
   events IaFindingEvent[]
 
+  // Set when the finding was documented while working through an audit.
+  audit     IaAudit?     @relation(fields: [auditId], references: [id], onDelete: SetNull)
+  auditId   String?
+  auditLine IaAuditLine?
+
+  @@index([auditId])
   @@index([status])
   @@index([facilityId])
   @@index([departmentId])
@@ -847,4 +858,86 @@ model IaEmailTemplate {
   intro     String
   footer    String
   updatedAt DateTime @updatedAt
+}
+
+enum IaAuditStatus {
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum IaLineStatus {
+  PENDING // not counted yet
+  OK // counted and matches (or counted with no system figure to compare)
+  DISCREPANCY // counted differently, or flagged for a non-count problem; has a finding
+}
+
+// One inventory audit being worked through: the list of lines to audit is
+// uploaded, then counted line by line, with discrepancies documented as
+// findings while the audit is still open.
+model IaAudit {
+  id         String      @id @default(cuid())
+  name       String
+  auditType  IaAuditType
+  auditDate  DateTime
+  auditors   String? // initials / names of the team, as on the tracker
+  notes      String?
+  sourceFile String?
+
+  facility            IaFacility    @relation(fields: [facilityId], references: [id])
+  facilityId          String
+  // Department new findings from this audit are attributed to unless changed.
+  defaultDepartment   IaDepartment? @relation("IaAuditDefaultDept", fields: [defaultDepartmentId], references: [id])
+  defaultDepartmentId String?
+
+  status        IaAuditStatus @default(IN_PROGRESS)
+  createdBy     User?         @relation("IaAuditCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById   String?
+  completedBy   User?         @relation("IaAuditCompleter", fields: [completedById], references: [id], onDelete: SetNull)
+  completedById String?
+  completedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lines    IaAuditLine[]
+  findings IaFinding[]
+
+  @@index([status])
+  @@index([facilityId, auditDate])
+}
+
+model IaAuditLine {
+  id       String  @id @default(cuid())
+  audit    IaAudit @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  auditId  String
+  position Int // order in the uploaded file
+
+  product  String?
+  batchId  String?
+  pid      String?
+  strain   String?
+  room     String?
+  serialNo String?
+  unit     String?
+  category String? // the product's own category (Edible Gummies, ...), not a finding category
+
+  systemQty Float? // what the system says (from the upload)
+  actualQty Float? // what was counted; null until counted
+
+  status IaLineStatus @default(PENDING)
+  note   String?
+
+  countedBy   User?     @relation("IaAuditLineCounter", fields: [countedById], references: [id], onDelete: SetNull)
+  countedById String?
+  countedAt   DateTime?
+
+  finding   IaFinding? @relation(fields: [findingId], references: [id], onDelete: SetNull)
+  findingId String?    @unique
+
+  // Also the version used to catch two people saving the same line at once.
+  updatedAt DateTime @updatedAt
+
+  @@index([auditId, status])
+  @@index([auditId, room])
+  @@index([auditId, position])
 }

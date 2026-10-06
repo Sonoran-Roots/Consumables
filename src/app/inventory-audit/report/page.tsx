@@ -58,6 +58,23 @@ export default async function ReportPage({ searchParams }: PageProps<"/inventory
   const now = new Date();
 
   const periodWhere: Prisma.IaFindingWhereInput = { AND: [scope, base, inPeriod(filters)] };
+  // Audits are the inventory team's working records, so managers don't see this section.
+  const periodAudits = isManager
+    ? []
+    : await db.iaAudit.findMany({
+        where: { auditDate: { gte: filters.from, lte: filters.to }, ...(filters.facilityId ? { facilityId: filters.facilityId } : {}) },
+        orderBy: { auditDate: "desc" }, take: 100, include: { facility: true },
+      });
+  const auditLines = periodAudits.length
+    ? await db.iaAuditLine.groupBy({ by: ["auditId", "status"], where: { auditId: { in: periodAudits.map((a) => a.id) } }, _count: { _all: true } })
+    : [];
+  const auditRows = periodAudits.map((a) => {
+    const n = (s: string) => auditLines.find((g) => g.auditId === a.id && g.status === s)?._count._all ?? 0;
+    const pending = n("PENDING"), ok = n("OK"), disc = n("DISCREPANCY");
+    return { a, total: pending + ok + disc, counted: ok + disc, disc };
+  });
+  const auditTotals = auditRows.reduce((t, r) => ({ counted: t.counted + r.counted, disc: t.disc + r.disc }), { counted: 0, disc: 0 });
+
   const [opts, managers, inPeriodRows, attention, attentionTotal] = await Promise.all([
     getFormOptions(),
     isManager ? Promise.resolve([]) : db.user.findMany({ where: { auditRole: { in: ["MANAGER", "ADMIN"] } }, orderBy: { name: "asc" }, select: { id: true, name: true, email: true } }),
@@ -160,6 +177,35 @@ export default async function ReportPage({ searchParams }: PageProps<"/inventory
         <Breakdown title="By category" rows={sorted(by.category).slice(0, 12)} />
         <Breakdown title="By facility" rows={sorted(by.facility)} />
       </div>
+
+      {auditRows.length > 0 && (
+        <section className="mt-8">
+          <h2 className="text-sm font-medium text-gray-700">
+            Audits in this period — {auditTotals.counted.toLocaleString("en-US")} lines counted, {auditTotals.disc.toLocaleString("en-US")} discrepancies
+            {auditTotals.counted > 0 && ` (${((auditTotals.disc / auditTotals.counted) * 100).toFixed(1)}%)`}
+          </h2>
+          <div className="mt-2 overflow-x-auto rounded-lg border border-gray-200 bg-white">
+            <table className="min-w-full divide-y divide-gray-200 text-sm">
+              <thead className="bg-gray-50">
+                <tr>{["Audit", "Facility", "Date", "Counted", "Discrepancies", "Rate", "Status"].map((h) => <th key={h} className="px-3 py-2 text-left font-medium text-gray-500">{h}</th>)}</tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {auditRows.map(({ a, total: t, counted, disc }) => (
+                  <tr key={a.id} className="hover:bg-gray-50">
+                    <td className="px-3 py-2"><Link href={`/inventory-audit/audits/${a.id}`} className="font-medium text-gray-900 hover:underline">{a.name}</Link></td>
+                    <td className="whitespace-nowrap px-3 py-2 text-gray-600">{a.facility.name}</td>
+                    <td className="whitespace-nowrap px-3 py-2 text-gray-600">{formatDate(a.auditDate)}</td>
+                    <td className="whitespace-nowrap px-3 py-2 tabular-nums text-gray-600">{counted.toLocaleString("en-US")} / {t.toLocaleString("en-US")}</td>
+                    <td className={`whitespace-nowrap px-3 py-2 tabular-nums ${disc ? "font-medium text-red-700" : "text-gray-400"}`}>{disc || "—"}</td>
+                    <td className="whitespace-nowrap px-3 py-2 tabular-nums text-gray-600">{counted > 0 ? `${((disc / counted) * 100).toFixed(1)}%` : "—"}</td>
+                    <td className="whitespace-nowrap px-3 py-2 text-gray-600">{a.status === "COMPLETED" ? "Completed" : "In progress"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       <section className="mt-8">
         <h2 className="text-sm font-medium text-gray-700">

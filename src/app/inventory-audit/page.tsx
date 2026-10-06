@@ -22,11 +22,13 @@ export default async function InventoryAuditHome({ searchParams }: PageProps<"/i
   const me = await getAuditSession();
   const scope: Prisma.IaFindingWhereInput = me ? await findingScope(me) : { id: "" };
 
-  const [byStatus, overdue, byDepartment, recent] = await Promise.all([
+  const canAudit = me !== null && CAN_ENTER_FINDINGS.includes(me.role);
+  const [byStatus, overdue, byDepartment, recent, inProgress] = await Promise.all([
     db.iaFinding.groupBy({ by: ["status"], where: scope, _count: { _all: true } }),
     db.iaFinding.count({ where: { AND: [scope, { status: { in: ["OPEN", "NOTIFIED"] }, dueDate: { lt: overdueCutoff(now) } }] } }),
     db.iaFinding.groupBy({ by: ["departmentId"], where: { AND: [scope, { status: { in: ["OPEN", "NOTIFIED"] } }] }, _count: { _all: true }, orderBy: { _count: { departmentId: "desc" } }, take: 8 }),
     db.iaFinding.findMany({ where: scope, orderBy: { createdAt: "desc" }, take: 6, include: { facility: true, department: true } }),
+    canAudit ? db.iaAudit.findMany({ where: { status: "IN_PROGRESS" }, orderBy: { createdAt: "desc" }, take: 5, include: { facility: true, _count: { select: { lines: true } } } }) : Promise.resolve([]),
   ]);
   const departments = await db.iaDepartment.findMany({ where: { id: { in: byDepartment.map((d) => d.departmentId) } }, select: { id: true, name: true } });
   const deptName = new Map(departments.map((d) => [d.id, d.name]));
@@ -41,6 +43,20 @@ export default async function InventoryAuditHome({ searchParams }: PageProps<"/i
       )}
       <h1 className="text-xl font-semibold text-gray-900">Inventory Audit</h1>
       <p className="mt-1 text-sm text-gray-500">Findings from inventory audits, followed through to resolution.</p>
+
+      {inProgress.length > 0 && (
+        <section className="mt-6">
+          <h2 className="text-sm font-medium text-gray-700">Audits in progress</h2>
+          <ul className="mt-2 divide-y divide-gray-100 overflow-hidden rounded-lg border border-gray-200 bg-white text-sm">
+            {inProgress.map((a) => (
+              <li key={a.id} className="flex items-center justify-between gap-3 px-4 py-2">
+                <Link href={`/inventory-audit/audits/${a.id}`} className="min-w-0 truncate font-medium text-gray-900 hover:underline">{a.name}</Link>
+                <span className="shrink-0 text-xs text-gray-400">{a.facility.name} · {a._count.lines.toLocaleString("en-US")} lines</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         {STATUSES.map((s) => (

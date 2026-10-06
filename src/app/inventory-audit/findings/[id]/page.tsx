@@ -30,7 +30,7 @@ export default async function FindingPage({ params }: PageProps<"/inventory-audi
     db.iaFinding.findUnique({
       where: { id },
       include: {
-        facility: true, department: true, secondDepartment: true, findingType: true, category: true,
+        facility: true, department: true, secondDepartment: true, findingType: true, category: true, audit: { select: { id: true, name: true } },
         assignedTo: { select: { name: true, email: true } },
         resolvedBy: { select: { name: true, email: true } },
         verifiedBy: { select: { name: true, email: true } },
@@ -70,6 +70,7 @@ export default async function FindingPage({ params }: PageProps<"/inventory-audi
         <div className="space-y-6 lg:col-span-2">
           <dl className="grid gap-4 rounded-lg border border-gray-200 bg-white p-5 sm:grid-cols-2">
             <Field label="Category" value={f.category?.name} />
+            <Field label="From audit" value={f.audit ? (me.role === "MANAGER" ? f.audit.name : <Link href={`/inventory-audit/audits/${f.audit.id}`} className="underline">{f.audit.name}</Link>) : null} />
             <Field label="Facility" value={f.facility.name} />
             <Field label="Date audited" value={formatDate(f.auditDate)} />
             <Field label="Department" value={f.department.name} />

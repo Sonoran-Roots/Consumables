@@ -12,6 +12,7 @@ import JarsLogo from "./jars-logo";
 type Leaf = { href: string; label: string };
 const LINKS: Leaf[] = [
   { href: AUDIT_PREFIX, label: "Dashboard" },
+  { href: `${AUDIT_PREFIX}/audits`, label: "Audits" },
   { href: `${AUDIT_PREFIX}/findings`, label: "Findings" },
   { href: `${AUDIT_PREFIX}/report`, label: "Report" },
   { href: `${AUDIT_PREFIX}/findings/new`, label: "Add finding" },
