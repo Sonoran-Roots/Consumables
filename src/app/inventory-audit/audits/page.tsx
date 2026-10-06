@@ -4,6 +4,7 @@ import type { Prisma } from "@prisma/client";
 import { formatDate } from "@/lib/ia/dates";
 import { getAuditSession } from "@/lib/ia/auth";
 import { CAN_RUN_AUDITS } from "@/lib/ia/workflow";
+import { CULTIVATION_PREFIX, cultivationLabel } from "@/lib/ia/cultivation";
 
 export const dynamic = "force-dynamic";
 const one = (v: string | string[] | undefined) => ((Array.isArray(v) ? v[0] : v) ?? "").trim();
@@ -13,7 +14,12 @@ export default async function AuditsPage({ searchParams }: PageProps<"/inventory
   const me = await getAuditSession();
   const canStart = me !== null && CAN_RUN_AUDITS.includes(me.role);
   const show = ["progress", "done", "all"].includes(one(sp.show)) ? one(sp.show) : "progress";
-  const where: Prisma.IaAuditWhereInput = show === "progress" ? { status: "IN_PROGRESS" } : show === "done" ? { status: "COMPLETED" } : {};
+  // Product audits (counted by package) and cultivation audits (counted by batch and room) are kept apart.
+  const cultivation = one(sp.view) === "cultivation";
+  const kind: Prisma.IaAuditWhereInput = cultivation
+    ? { dutchieType: { startsWith: CULTIVATION_PREFIX } }
+    : { OR: [{ dutchieType: null }, { NOT: { dutchieType: { startsWith: CULTIVATION_PREFIX } } }] };
+  const where: Prisma.IaAuditWhereInput = { AND: [kind, show === "progress" ? { status: "IN_PROGRESS" } : show === "done" ? { status: "COMPLETED" } : {}] };
 
   const audits = await db.iaAudit.findMany({
     where, orderBy: [{ auditDate: "desc" }, { createdAt: "desc" }], take: 200,
@@ -28,7 +34,7 @@ export default async function AuditsPage({ searchParams }: PageProps<"/inventory
     return { total: pending + ok + disc, counted: ok + disc, disc };
   };
   const tab = (key: string, label: string) => (
-    <Link key={key} href={`/inventory-audit/audits?show=${key}`}
+    <Link key={key} href={`/inventory-audit/audits?show=${key}${cultivation ? "&view=cultivation" : ""}`}
       className={`rounded-full px-3 py-1 text-sm font-medium ${show === key ? "bg-black text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}>{label}</Link>
   );
 
@@ -36,14 +42,27 @@ export default async function AuditsPage({ searchParams }: PageProps<"/inventory
     <div className="max-w-5xl">
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="text-xl font-semibold text-gray-900">Audits</h1>
-          <p className="mt-1 text-sm text-gray-500">Scan each item, check its label and count, and document discrepancies as you find them.</p>
+          <h1 className="text-xl font-semibold text-gray-900">{cultivation ? "Cultivation audits" : "Audits"}</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            {cultivation
+              ? "Count the plants in each batch and room, check the strain and room, and document discrepancies as you find them."
+              : "Scan each item, check its label and count, and document discrepancies as you find them."}
+          </p>
         </div>
         {canStart && (
-          <Link href="/inventory-audit/audits/new" className="shrink-0 whitespace-nowrap rounded-md border border-black bg-black px-3 py-2 text-sm font-medium text-white hover:bg-white hover:text-black">
-            Start an audit
+          <Link href={cultivation ? "/inventory-audit/audits/new?type=cultivation" : "/inventory-audit/audits/new"} className="shrink-0 whitespace-nowrap rounded-md border border-black bg-black px-3 py-2 text-sm font-medium text-white hover:bg-white hover:text-black">
+            {cultivation ? "Start a cultivation audit" : "Start an audit"}
           </Link>
         )}
+      </div>
+
+      <div className="mt-4 flex gap-1 border-b border-gray-200">
+        {[["", "Product audits"], ["cultivation", "Cultivation audits"]].map(([v, label]) => (
+          <Link key={v} href={v ? "/inventory-audit/audits?view=cultivation" : "/inventory-audit/audits"}
+            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${(v === "cultivation") === cultivation ? "border-black text-gray-900" : "border-transparent text-gray-500 hover:text-gray-800"}`}>
+            {label}
+          </Link>
+        ))}
       </div>
 
       <div className="mt-4 flex gap-2">{tab("progress", "In progress")}{tab("done", "Completed")}{tab("all", "All")}</div>
@@ -59,7 +78,10 @@ export default async function AuditsPage({ searchParams }: PageProps<"/inventory
               const pct = s.total ? Math.round((s.counted / s.total) * 100) : 0;
               return (
                 <tr key={a.id} className="hover:bg-gray-50">
-                  <td className="px-3 py-2"><Link href={`/inventory-audit/audits/${a.id}`} className="font-medium text-gray-900 hover:underline">{a.name}</Link></td>
+                  <td className="px-3 py-2">
+                    <Link href={`/inventory-audit/audits/${a.id}`} className="font-medium text-gray-900 hover:underline">{a.name}</Link>
+                    {cultivation && <span className="ml-2 text-xs text-gray-400">{cultivationLabel(a.dutchieType).replace(" cultivation audit", "")}</span>}
+                  </td>
                   <td className="whitespace-nowrap px-3 py-2 text-gray-600">{a.facility.name}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-gray-600">{formatDate(a.auditDate)}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-gray-600">

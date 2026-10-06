@@ -12,6 +12,7 @@ import AuditBoard from "./audit-board";
 import AuditControls from "./audit-controls";
 import ScanButton from "./scan-button";
 import CountsUpload from "./counts-upload";
+import { cultivationLabel, isCultivationType } from "@/lib/ia/cultivation";
 
 export const dynamic = "force-dynamic";
 const PAGE_SIZE = 100;
@@ -40,6 +41,7 @@ export default async function AuditPage({ params, searchParams }: PageProps<"/in
   const canRun = CAN_RUN_AUDITS.includes(me.role);
   // Retail audits are run as Dutchie audit tables (an initial table out, a completed one back).
   // Production and distribution audits are counted from the inventory download instead.
+  const cultivation = isCultivationType(audit.dutchieType);
   const dutchieTable = !audit.dutchieType || audit.dutchieType === "RETAIL";
 
   const qs = (over: Record<string, string>) => {
@@ -107,12 +109,12 @@ export default async function AuditPage({ params, searchParams }: PageProps<"/in
         <form method="get" className="flex flex-wrap items-center gap-2">
           <input type="hidden" name="status" value={q ? "all" : status} />
           <input
-            name="q" defaultValue={q} placeholder="Scan the barcode, or type a PID, tag, batch or product"
+            name="q" defaultValue={q} placeholder={cultivation ? "Type a batch, strain or tag" : "Scan the barcode, or type a PID, tag, batch or product"}
             autoFocus={q !== ""}
             className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-base sm:max-w-md"
           />
           <button className="rounded-lg border border-black bg-black px-4 py-2 text-sm font-medium text-white">Find</button>
-          {canEdit && <ScanButton auditId={id} />}
+          {canEdit && !cultivation && <ScanButton auditId={id} />}
           {rooms.length > 0 && (
             <select name="room" defaultValue={room} className="rounded-lg border border-gray-300 px-2 py-2 text-sm">
               <option value="">All rooms</option>
@@ -129,13 +131,13 @@ export default async function AuditPage({ params, searchParams }: PageProps<"/in
         )}
 
         <p className="mt-3 text-xs text-gray-500">
-          {matching.toLocaleString("en-US")} item{matching === 1 ? "" : "s"}
+          {matching.toLocaleString("en-US")} {cultivation ? "batch" : "item"}{matching === 1 ? "" : cultivation ? "es" : "s"}
           {pages > 1 && ` · page ${page} of ${pages}`}
           {canEdit ? " · tap an item to audit it" : " · this audit is complete"}
         </p>
 
         <div className="mt-2">
-          <AuditBoard lines={lines.map(toLineView)} canEdit={canEdit} openId={openId} />
+          <AuditBoard lines={lines.map(toLineView)} canEdit={canEdit} openId={openId} cultivation={cultivation} />
         </div>
 
         {pages > 1 && (
@@ -160,12 +162,12 @@ export default async function AuditPage({ params, searchParams }: PageProps<"/in
 
   return (
     <div className="max-w-5xl">
-      <BackLink href="/inventory-audit/audits" label="Audits" />
+      <BackLink href={cultivation ? "/inventory-audit/audits?view=cultivation" : "/inventory-audit/audits"} label={cultivation ? "Cultivation audits" : "Audits"} />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-xl font-semibold text-gray-900">{audit.name}</h1>
           <p className="mt-1 text-sm text-gray-500">
-            {audit.facility.name}{audit.dutchieType ? ` · ${audit.dutchieType.charAt(0) + audit.dutchieType.slice(1).toLowerCase()} audit` : ""} · {formatDate(audit.auditDate)}
+            {audit.facility.name}{audit.dutchieType ? ` · ${cultivation ? cultivationLabel(audit.dutchieType) : audit.dutchieType.charAt(0) + audit.dutchieType.slice(1).toLowerCase() + " audit"}` : ""} · {formatDate(audit.auditDate)}
             {audit.auditors ? ` · ${audit.auditors}` : ""}
             {audit.defaultDepartment ? ` · findings to ${audit.defaultDepartment.name}` : ""}
           </p>

@@ -8,6 +8,7 @@ import { getAuditSession } from "@/lib/ia/auth";
 import { parseFlexibleDate } from "@/lib/ia/dates";
 import { MAX_FILE_BYTES } from "@/lib/ia/csv";
 import { parseAuditLines } from "@/lib/ia/audit-import";
+import { cultivationType, parseCultivationLines, parseStage } from "@/lib/ia/cultivation";
 import { applyCompletedCounts, type CountsResult } from "@/lib/ia/audit-counts";
 import { completeAudit, recordLine, reopenAudit, type RecordInput, type RecordResult } from "@/lib/ia/audits";
 import { CAN_CONFIGURE, CAN_ENTER_FINDINGS, CAN_RUN_AUDITS } from "@/lib/ia/workflow";
@@ -35,13 +36,16 @@ export async function createAudit(_prev: NewAuditState, formData: FormData): Pro
   if (!(file instanceof File) || file.size === 0) return { error: "Please choose the Dutchie export (CSV)." };
   if (file.size > MAX_FILE_BYTES) return { error: "That file is over 3.8 MB — split it by room or product group and start one audit per part." };
 
-  const parsed = parseAuditLines(await file.text());
+  // A cultivation audit counts plants by batch and room, for one stage or all of them.
+  const cultivation = formData.get("kind") === "cultivation";
+  const stage = parseStage(String(formData.get("stage") ?? ""));
+  const parsed = cultivation ? parseCultivationLines(await file.text(), stage) : parseAuditLines(await file.text());
   if (parsed.error) return { error: parsed.error };
 
   const audit = await db.iaAudit.create({
     data: {
       name, auditType: "PRODUCT" as IaAuditType, auditDate, facilityId, defaultDepartmentId: departmentId,
-      dutchieType: ["RETAIL", "PRODUCTION", "DISTRIBUTION"].includes(String(formData.get("dutchieType"))) ? String(formData.get("dutchieType")) : null,
+      dutchieType: cultivation ? cultivationType(stage) : ["RETAIL", "PRODUCTION", "DISTRIBUTION"].includes(String(formData.get("dutchieType"))) ? String(formData.get("dutchieType")) : null,
       auditors: text(formData, "auditors"), notes: text(formData, "notes"), sourceFile: file.name.slice(0, 200), createdById: me.userId,
     },
     select: { id: true },

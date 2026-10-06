@@ -18,10 +18,11 @@ const STATUS_STYLE = {
 const input = "w-full rounded-lg border border-gray-300 px-3 py-2 text-base";
 
 export default function AuditBoard({
-  lines, canEdit, openId,
+  lines, canEdit, openId, cultivation = false,
 }: {
   lines: LineView[];
   canEdit: boolean;
+  cultivation?: boolean; // plants counted by batch and room
   openId: string | null; // a scan that matched exactly one line opens it straight away
 }) {
   const router = useRouter();
@@ -100,7 +101,7 @@ export default function AuditBoard({
       </ul>
 
       {active && canEdit && (
-        <ItemPanel key={`${active.id}:${active.version}`} line={active} onClose={() => setActiveId(null)} onSaved={afterSave} />
+        <ItemPanel key={`${active.id}:${active.version}`} line={active} cultivation={cultivation} onClose={() => setActiveId(null)} onSaved={afterSave} />
       )}
     </>
   );
@@ -108,7 +109,12 @@ export default function AuditBoard({
 
 type Flag = { foundValue: string; note: string };
 
-function ItemPanel({ line, onClose, onSaved }: { line: LineView; onClose: () => void; onSaved: (line: LineView) => void }) {
+// What a cultivation audit checks besides the plant count.
+const CULTIVATION_CHECK_FIELDS: FlagField[] = ["STRAIN", "BATCH", "ROOM"];
+
+function ItemPanel({ line, cultivation, onClose, onSaved }: { line: LineView; cultivation: boolean; onClose: () => void; onSaved: (line: LineView) => void }) {
+  const checkFields = cultivation ? CULTIVATION_CHECK_FIELDS : LABEL_CHECK_FIELDS;
+  const wholeIssues = cultivation ? (["OTHER"] as FlagField[]) : WHOLE_LABEL_ISSUES;
   const [qty, setQty] = useState(line.actualQty !== null ? String(line.actualQty) : "");
   const [labelOk, setLabelOk] = useState(line.labelVerified);
   // Open when the label has already been checked or has flags; otherwise out of the way.
@@ -165,12 +171,18 @@ function ItemPanel({ line, onClose, onSaved }: { line: LineView; onClose: () => 
           <div className="min-w-0">
             <p className="text-lg font-semibold leading-tight text-gray-900">{line.product ?? line.strain ?? line.batchId ?? `Line ${line.position}`}</p>
             {line.pid && <p className="mt-0.5 font-mono text-sm text-gray-600">PID {line.pid}</p>}
+            {cultivation && (
+              <p className="mt-0.5 text-sm text-gray-600">
+                {[line.room, line.batchId && `Batch ${line.batchId}`, line.category].filter(Boolean).join(" · ")}
+              </p>
+            )}
+            {cultivation && line.serialNo && <p className="mt-0.5 font-mono text-xs text-gray-400">Tags {line.serialNo}</p>}
           </div>
           <button type="button" onClick={onClose} className="shrink-0 rounded-full px-2 py-1 text-xl leading-none text-gray-400 hover:text-gray-700" aria-label="Close">×</button>
         </div>
 
         {/* The count: the one required step */}
-        <p className="mt-4 text-sm font-medium text-gray-800">Count it</p>
+        <p className="mt-4 text-sm font-medium text-gray-800">{cultivation ? "Count the plants" : "Count it"}</p>
         <div className="mt-2 flex items-center gap-3">
           <div className="w-32 shrink-0 rounded-xl bg-gray-50 p-3 text-center">
             <p className="text-xs uppercase tracking-wide text-gray-400">System</p>
@@ -198,23 +210,23 @@ function ItemPanel({ line, onClose, onSaved }: { line: LineView; onClose: () => 
         {/* The label: good to verify, never required */}
         <details open={labelOpen} onToggle={(e) => setLabelOpen(e.currentTarget.open)} className="mt-5 rounded-xl border border-gray-200">
           <summary className="cursor-pointer select-none px-3 py-2.5 text-sm font-medium text-gray-800">
-            Check the label <span className="font-normal text-gray-400">(optional)</span>
+            {cultivation ? "Check strain and room" : "Check the label"} <span className="font-normal text-gray-400">(optional)</span>
             {labelOk && flagCount === 0 && <span className="ml-2 text-xs font-semibold text-[#134229]">✓ matches</span>}
             {flagCount > 0 && <span className="ml-2 text-xs font-semibold text-red-700">{flagCount} wrong</span>}
           </summary>
           <div className="px-3 pb-3">
           <div className="flex items-center justify-between">
-            <p className="text-xs text-gray-500">Compare the label with what the system says, and mark anything that&apos;s wrong.</p>
+            <p className="text-xs text-gray-500">{cultivation ? "Compare what you see with what the system says, and mark anything that's wrong." : "Compare the label with what the system says, and mark anything that's wrong."}</p>
             <button
               type="button"
               onClick={() => setLabelOk((v) => !v)}
               className={`rounded-full px-3 py-1 text-xs font-semibold ${labelOk ? "bg-[#134229] text-white" : "border border-gray-300 text-gray-700"}`}
             >
-              {labelOk ? "✓ Label matches" : flagCount > 0 ? "Rest of label matches" : "Label matches"}
+              {cultivation ? (labelOk ? "✓ All correct" : flagCount > 0 ? "Rest is correct" : "All correct") : labelOk ? "✓ Label matches" : flagCount > 0 ? "Rest of label matches" : "Label matches"}
             </button>
           </div>
           <ul className="mt-2 divide-y divide-gray-100 rounded-xl border border-gray-200">
-            {LABEL_CHECK_FIELDS.map((field) => {
+            {checkFields.map((field) => {
               const flagged = flags[field];
               const sys = systemValue(field);
               return (
@@ -233,7 +245,7 @@ function ItemPanel({ line, onClose, onSaved }: { line: LineView; onClose: () => 
                   </div>
                   {flagged && (
                     <div className="space-y-2 px-3 pb-3">
-                      <input value={flagged.foundValue} onChange={(e) => setFlag(field, { foundValue: e.target.value })} placeholder={`What does the label show for ${fieldLabel(field).toLowerCase()}?`} className={input} />
+                      <input value={flagged.foundValue} onChange={(e) => setFlag(field, { foundValue: e.target.value })} placeholder={cultivation ? `What is the actual ${fieldLabel(field).toLowerCase()}?` : `What does the label show for ${fieldLabel(field).toLowerCase()}?`} className={input} />
                       <input value={flagged.note} onChange={(e) => setFlag(field, { note: e.target.value })} placeholder="Note (optional)" className={input} />
                     </div>
                   )}
@@ -242,7 +254,7 @@ function ItemPanel({ line, onClose, onSaved }: { line: LineView; onClose: () => 
             })}
           </ul>
           <div className="mt-2 flex flex-wrap gap-2">
-            {WHOLE_LABEL_ISSUES.map((field) => (
+            {wholeIssues.map((field) => (
               <button
                 key={field}
                 type="button"
@@ -253,7 +265,7 @@ function ItemPanel({ line, onClose, onSaved }: { line: LineView; onClose: () => 
               </button>
             ))}
           </div>
-          {WHOLE_LABEL_ISSUES.filter((f) => flags[f]).map((field) => (
+          {wholeIssues.filter((f) => flags[f]).map((field) => (
             <input key={field} value={flags[field].note} onChange={(e) => setFlag(field, { note: e.target.value })} placeholder={`${fieldLabel(field)} — describe it`} className={`${input} mt-2`} />
           ))}
           </div>
