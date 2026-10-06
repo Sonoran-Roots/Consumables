@@ -84,11 +84,14 @@ export async function reopenAuditAction(auditId: string): Promise<{ ok: true } |
   return r;
 }
 
-export async function deleteAudit(auditId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+// Deletes the audit and its lines. Its findings are deleted with it, or (keepFindings)
+// stay in the tracker without an audit.
+export async function deleteAudit(auditId: string, keepFindings = false): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!(await getAuditSession(CAN_CONFIGURE))) return { ok: false, error: "Only an admin can delete an audit." };
-  const findings = await db.iaFinding.count({ where: { auditId } });
-  if (findings > 0) return { ok: false, error: `This audit has ${findings} finding${findings === 1 ? "" : "s"} — they'd lose their audit. Delete or resolve those first.` };
-  await db.iaAudit.deleteMany({ where: { id: auditId } });
+  await db.$transaction(async (tx) => {
+    if (!keepFindings) await tx.iaFinding.deleteMany({ where: { auditId } });
+    await tx.iaAudit.deleteMany({ where: { id: auditId } });
+  });
   revalidatePath("/inventory-audit", "layout");
   return { ok: true };
 }

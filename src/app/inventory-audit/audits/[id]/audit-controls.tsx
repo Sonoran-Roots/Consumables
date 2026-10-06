@@ -8,11 +8,12 @@ const btn = "rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font
 const primary = "rounded-md border border-black bg-black px-3 py-1.5 text-sm font-medium text-white hover:bg-white hover:text-black disabled:opacity-50";
 
 export default function AuditControls({
-  auditId, status, pending, canRun, canDelete, exportHref, dutchieExportHref,
+  auditId, status, pending, findings, canRun, canDelete, exportHref, dutchieExportHref,
 }: {
   auditId: string;
   status: "IN_PROGRESS" | "COMPLETED";
   pending: number;
+  findings: number; // findings documented in this audit
   canRun: boolean; // an audit manager: complete / reopen
   canDelete: boolean; // an admin
   exportHref: string;
@@ -67,8 +68,15 @@ export default function AuditControls({
           type="button" disabled={busy}
           className="text-xs text-gray-400 hover:text-red-600 hover:underline"
           onClick={() => {
-            if (confirm("Delete this audit and all its lines? This can't be undone.")) {
-              void run(() => deleteAudit(auditId), () => router.push("/inventory-audit/audits"));
+            const go = (keep: boolean) => void run(() => deleteAudit(auditId, keep), () => router.push("/inventory-audit/audits"));
+            if (findings === 0) {
+              if (confirm("Delete this audit and all its lines? This can't be undone.")) go(false);
+            } else if (confirm(`This audit has ${findings} finding${findings === 1 ? "" : "s"}. Delete the audit AND its findings? This can't be undone.
+
+OK = delete both. Cancel = choose to keep the findings.`)) {
+              go(false);
+            } else if (confirm(`Delete only the audit and its lines, and keep the ${findings} finding${findings === 1 ? "" : "s"} in the tracker?`)) {
+              go(true);
             }
           }}
         >

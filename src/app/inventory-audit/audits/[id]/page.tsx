@@ -180,7 +180,7 @@ export default async function AuditPage({ params, searchParams }: PageProps<"/in
           </p>
         </div>
         <AuditControls
-          auditId={id} status={audit.status} pending={stats.pending}
+          auditId={id} status={audit.status} pending={stats.pending} findings={await db.iaFinding.count({ where: { auditId: id } })}
           canRun={canRun} canDelete={CAN_CONFIGURE.includes(me.role)}
           exportHref={`/inventory-audit/audits/${id}/export`}
           dutchieExportHref={dutchieTable ? `/inventory-audit/audits/${id}/export?format=dutchie` : null}
