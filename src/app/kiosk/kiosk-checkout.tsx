@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { logKioskCheckout } from "../checkouts/actions";
 import { ChevronDownIcon, SearchIcon, CheckCircleIcon, XIcon } from "@/components/icons";
@@ -57,10 +58,12 @@ export default function KioskCheckout({
   sites,
   people: serverPeople,
   items,
+  adminHref,
 }: {
   sites: Site[];
   people: Person[];
   items: Item[];
+  adminHref: string | null; // null when this login has no access to the backend
 }) {
   const router = useRouter();
   const [siteId, setSiteId] = useState<string | null>(null);
@@ -229,6 +232,11 @@ export default function KioskCheckout({
             CONSUMABLE MANAGEMENT
           </div>
         </div>
+        {adminHref && (
+          <Link href={adminHref} className="rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+            Admin console
+          </Link>
+        )}
         <div className="w-full max-w-md">
           <label
             htmlFor="kiosk-site"
@@ -276,6 +284,12 @@ export default function KioskCheckout({
             {site?.name} · change
           </button>
         </div>
+        <div className="flex items-center gap-3">
+        {adminHref && (
+          <Link href={adminHref} className="rounded-full bg-white/10 px-3 py-1.5 text-sm font-medium text-white/80 hover:bg-white/20 hover:text-white">
+            Admin console
+          </Link>
+        )}
         <div className="flex overflow-hidden rounded-full bg-white/10 p-0.5">
           <button
             type="button"
@@ -295,6 +309,7 @@ export default function KioskCheckout({
           >
             Return
           </button>
+        </div>
         </div>
       </div>
 
